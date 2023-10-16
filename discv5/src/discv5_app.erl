@@ -10,9 +10,10 @@
 -export([start/2, stop/1]).
 
 start(_StartType, _StartArgs) ->
-    discv5_sup:start_link().
+  sync:go(),
+  discv5_sup:start_link().
 
 stop(_State) ->
-    ok.
+  ok.
 
 %% internal functions
