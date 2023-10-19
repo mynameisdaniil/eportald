@@ -4,11 +4,7 @@
 
 -export([node_a/0, node_b/0, ping_msg/0]).
 
--export([decode_masked_header/2, decode_variable_header/1]).
-
--define(ORDINARY_MSG_FLAG, 0).
--define(WHOAREYOU_MSG_FLAG, 1).
--define(HJANDSHAKE_MSG_FLAG, 2).
+-include("discv5.hrl").
 
 -type parse_result() ::
   {ok, term()}
@@ -16,57 +12,72 @@
 
 -spec parse(binary(), binary()) -> parse_result().
 
--record(state, {static_header, variable_header, body, bytes_to_decode, node_id}).
--record(masked_header, {version, flag, nonce, authdata_size}).
+-record(state, {static_header, authdata, body, bytes_to_decode, node_id, crypto}).
 
 parse(Input, NodeId)
   when is_binary(Input)
        andalso byte_size(Input) >= 63
        andalso byte_size(Input) =< 1280 ->
 
-  do_parse(masked_header, #state{bytes_to_decode = Input, node_id = NodeId});
+  do_parse(init_crypto, #state{bytes_to_decode = Input, node_id = NodeId});
 
 parse(_, _) ->
   {error, unexpected1}.
 
-do_parse(masked_header, #state{bytes_to_decode = Input, node_id = NodeId} = State) ->
-  case decode_masked_header(Input, NodeId) of
-    {error, _} = E -> E;
-    {ok, StaticHeader, Rest} ->
-      do_parse(variable_header, State#state{bytes_to_decode = Rest, static_header = StaticHeader})
+do_parse(init_crypto, #state{bytes_to_decode = <<MaskingIV:16/binary, Rest/binary>>, node_id = <<MaskingKey:16/binary, _/binary>>} = State) ->
+  Crypto = crypto:crypto_init(aes_128_ctr, MaskingKey, MaskingIV, [{encrypt, false}]),
+  do_parse(protocol_id, State#state{crypto = Crypto, bytes_to_decode = Rest});
+
+do_parse(protocol_id, #state{bytes_to_decode = <<ProtocolId:6/binary, Rest/binary>>, crypto = Crypto} = State) ->
+  case crypto:crypto_update(Crypto, ProtocolId) of
+    <<"discv5">> ->
+      do_parse(static_header, State#state{bytes_to_decode = Rest});
+    _ -> {error, "Incorrect protocol ID"}
   end;
 
-do_parse(variable_header, #state{bytes_to_decode = Input} = State) ->
-  case decode_variable_header(Input) of
-    {error, _} = E -> E;
-    {ok, VariableHeader, Rest} ->
-      do_parse(body, State#state{bytes_to_decode = Rest, variable_header = VariableHeader})
+do_parse(static_header, #state{bytes_to_decode = <<StaticHeader:17/binary, Rest/binary>>, crypto = Crypto} = State) ->
+  case crypto:crypto_update(Crypto, StaticHeader) of
+    <<Version:2/big-unsigned-integer-unit:8, Flag:1/big-unsigned-integer-unit:8, Nonce:12/big-unsigned-integer-unit:8, AuthdataSize:2/big-unsigned-integer-unit:8>> ->
+      DecodedStaticHeader = #static_header{version = Version, flag = Flag, nonce = Nonce, authdata_size = AuthdataSize},
+      do_parse(authdata, State#state{bytes_to_decode = Rest, static_header = DecodedStaticHeader});
+    _ -> {error, "Cannot parse static header"}
   end;
 
-do_parse(body, #state{bytes_to_decode = Input} = State) ->
-  case decode_body(Input) of
-    {error, _} = E -> E;
-    {ok, Body} ->
-      {ok, State#state{body = Body, bytes_to_decode = <<>>}}
+do_parse(authdata, #state{bytes_to_decode = Input, static_header = #static_header{authdata_size = AuthdataSize}, crypto = Crypto} = State) ->
+  case Input of
+    <<AuthData:AuthdataSize/binary, Rest/binary>> ->
+      DecodedAuthData = crypto:crypto_update(Crypto, AuthData),
+      do_parse(finalize_crypto, State#state{bytes_to_decode = Rest, authdata = DecodedAuthData});
+    _ -> {error, "Cannot parse AuthData"}
   end;
+
+do_parse(finalize_crypto, #state{crypto = Crypto} = State) ->
+  crypto:crypto_final(Crypto),
+  do_parse(decode_flag, State);
+
+do_parse(decode_flag, #state{static_header = #static_header{flag = Flag}} = State) ->
+  case Flag of
+    ?ORDINARY_MSG_FLAG ->
+      do_parse(message, State#state{});
+    ?WHOAREYOU_MSG_FLAG ->
+      do_parse(whoareyou, State#state{});
+    ?HANDSHAKE_MSG_FLAG ->
+      do_parse(handshake, State#state{});
+    _ -> {error, "Unknown flag."}
+  end;
+
+do_parse(whoareyou, #state{} = State) ->
+  WhoAreYou = #whoareyou_message{},
+  {ok, State};
+
+do_parse(handshake, #state{} = State) ->
+  Handshake = #handshake_message{},
+  do_parse(message, State);
+
+do_parse(message, #state{bytes_to_decode = Input} = State) ->
+  {ok, State};
 
 do_parse(_, _) ->
-  {error, unexpected2}.
-
-decode_masked_header(<<MaskingIV:16/binary, StaticHeader:23/binary, Rest/binary>>, <<MaskingKey:16/binary, _/binary>> = _NodeId) ->
-  case crypto:crypto_one_time(aes_128_ctr, MaskingKey, MaskingIV, StaticHeader, [{encrypt, false}]) of
-    <<"discv5", Version:2/big-unsigned-integer-unit:8, Flag:1/big-unsigned-integer-unit:8, Nonce:12/big-unsigned-integer-unit:8, AuthdataSize:2/big-unsigned-integer-unit:8>> ->
-      {ok, #masked_header{version = Version, flag = Flag, nonce = Nonce, authdata_size = AuthdataSize}, Rest};
-    _ -> {error, unexpected_protocol}
-  end;
-
-decode_masked_header(_, _) ->
-  {error, unexpected3}.
-
-decode_variable_header(Input) ->
-  {error, unexpected}.
-
-decode_body(Input) ->
   {error, unexpected}.
 
 node_a() ->
