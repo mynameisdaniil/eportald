@@ -1,6 +1,7 @@
 REBAR = ./rebar3
+ELVIS = ./elvis
 
-.PHONY: build run test
+.PHONY: build run test elvis
 
 build:
 	$(REBAR) compile
@@ -10,3 +11,6 @@ run:
 
 test:
 	$(REBAR) ct
+
+elvis:
+	$(ELVIS) rock
