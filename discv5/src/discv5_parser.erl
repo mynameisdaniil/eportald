@@ -13,7 +13,7 @@
 
 -spec parse(binary(), binary()) -> parse_result().
 
--record(state, {static_header, authdata, body, bytes_to_decode, node_id, crypto}).
+-record(state, {static_header, authdata, bytes_to_decode, node_id, crypto}).
 
 parse(Input, NodeId)
   when is_binary(Input)
@@ -48,7 +48,7 @@ do_parse(static_header, #state{bytes_to_decode = <<StaticHeader:17/binary, Rest/
     <<Version:2/big-unsigned-integer-unit:8,
       Flag:1/big-unsigned-integer-unit:8,
       Nonce:12/big-unsigned-integer-unit:8,
-      AuthdataSize:2/big-unsigned-integer>> ->
+      AuthdataSize:2/big-unsigned-integer-unit:8>> ->
 
       DecodedStaticHeader = #static_header{version = Version,
                                            flag = Flag,
@@ -89,16 +89,18 @@ do_parse(decode_flag, #state{static_header = #static_header{flag = Flag}} = Stat
     _ -> {error, "Unknown flag."}
   end;
 
-do_parse(whoareyou, #state{} = State) ->
-  WhoAreYou = #whoareyou_message{},
+do_parse(message, #state{bytes_to_decode = Payload, authdata = AuthData} = State) ->
+  OrdinaryMsg = #ordinary_message{src_id = AuthData, data = Payload},
+  {ok, State};
+
+do_parse(whoareyou, #state{bytes_to_decode = <<IdNonce:16/big-unsigned-integer-unit:8,
+                                               EnrSeq:8/big-unsigned-integer-unit:8>>} = State) ->
+  WhoAreYou = #whoareyou_message{id_nonce = IdNonce, enr_seq = EnrSeq},
   {ok, State};
 
 do_parse(handshake, #state{} = State) ->
   Handshake = #handshake_message{},
   do_parse(message, State);
-
-do_parse(message, #state{bytes_to_decode = Input} = State) ->
-  {ok, State};
 
 do_parse(_, _) ->
   {error, unexpected}.

@@ -13,7 +13,8 @@
 -type masking_iv() :: 0..?MAX_UNSIGNED_128_BIT.
 
 -record(ordinary_message, {
-          src_id :: node_id()
+          src_id :: node_id(),
+          data :: binary()
          }).
 
 -record(whoareyou_message, {
