@@ -13,7 +13,7 @@
 
 -spec parse(binary(), binary()) -> parse_result().
 
--record(state, {static_header, authdata, bytes_to_decode, node_id, crypto}).
+-record(state, {static_header, authdata, bytes_to_decode, node_id, crypto, payload}).
 
 parse(Input, NodeId)
   when is_binary(Input)
@@ -50,10 +50,12 @@ do_parse(static_header, #state{bytes_to_decode = <<StaticHeader:17/binary, Rest/
       Nonce:12/big-unsigned-integer-unit:8,
       AuthdataSize:2/big-unsigned-integer-unit:8>> ->
 
-      DecodedStaticHeader = #static_header{version = Version,
-                                           flag = Flag,
-                                           nonce = Nonce,
-                                           authdata_size = AuthdataSize},
+      DecodedStaticHeader = #static_header{
+                               version       = Version,
+                               flag          = Flag,
+                               nonce         = Nonce,
+                               authdata_size = AuthdataSize
+                              },
       do_parse(authdata, State#state{bytes_to_decode = Rest, static_header = DecodedStaticHeader});
 
     _ -> {error, "Cannot parse static header"}
@@ -89,18 +91,50 @@ do_parse(decode_flag, #state{static_header = #static_header{flag = Flag}} = Stat
     _ -> {error, "Unknown flag."}
   end;
 
+do_parse(message, #state{static_header = #static_header{authdata_size = AuthdataSize}})
+  when AuthdataSize /= 32 ->
+  {error, "Incorrect Authdata size"};
+
 do_parse(message, #state{bytes_to_decode = Payload, authdata = AuthData} = State) ->
   OrdinaryMsg = #ordinary_message{src_id = AuthData, data = Payload},
+  do_parse(message_data, State#state{payload = OrdinaryMsg});
+
+do_parse(message_data, #state{payload = OrdinaryMsg} = State) ->
   {ok, State};
+
+do_parse(whoareyou, #state{static_header = #static_header{authdata_size = AuthdataSize}})
+  when AuthdataSize /= 24 ->
+  {error, "Incorrect Authdata size"};
 
 do_parse(whoareyou, #state{bytes_to_decode = <<IdNonce:16/big-unsigned-integer-unit:8,
                                                EnrSeq:8/big-unsigned-integer-unit:8>>} = State) ->
   WhoAreYou = #whoareyou_message{id_nonce = IdNonce, enr_seq = EnrSeq},
-  {ok, State};
+  {ok, State#state{payload = WhoAreYou}};
 
-do_parse(handshake, #state{} = State) ->
-  Handshake = #handshake_message{},
-  do_parse(message, State);
+do_parse(handshake, #state{static_header = #static_header{authdata_size = AuthdataSize}})
+  when AuthdataSize < 34 ->
+  {error, "Invalid Authdata size"};
+
+do_parse(handshake, #state{authdata = Authdata,
+                           static_header = #static_header{authdata_size = AuthdataSize}} = State) ->
+  <<SrcId:32/binary,
+    SigSize:1/big-unsigned-integer-unit:8,
+    EphKeySize:1/big-unsigned-integer-unit:8,
+    Rest/binary>> = Authdata,
+  AuthdataHead = #authdata_head{
+                    src_id       = SrcId,
+                    sig_size     = SigSize,
+                    eph_key_size = EphKeySize
+                   },
+  RecordLen = AuthdataSize - (34 + 1 + 1),
+  <<IdSignature:SigSize/binary, EphPubkey:EphKeySize/binary, Record:RecordLen/binary>> = Rest,
+  Handshake = #handshake_message{
+                 authdata_head = AuthdataHead,
+                 id_signature  = IdSignature,
+                 eph_pubkey    = EphPubkey,
+                 record        = Record
+                },
+  do_parse(message, State#state{payload = Handshake});
 
 do_parse(_, _) ->
   {error, unexpected}.

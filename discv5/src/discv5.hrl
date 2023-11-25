@@ -4,13 +4,18 @@
 -define(WHOAREYOU_MSG_FLAG, 1).
 -define(HANDSHAKE_MSG_FLAG, 2).
 
--record(static_header, {version, flag, nonce, authdata_size}).
-
 -define(MAX_UNSIGNED_256_BIT, (1 bsl 256) - 1).
 -define(MAX_UNSIGNED_128_BIT, (1 bsl 128) - 1).
 
 -type node_id() :: 0..?MAX_UNSIGNED_256_BIT.
 -type masking_iv() :: 0..?MAX_UNSIGNED_128_BIT.
+
+-record(static_header, {
+          version,
+          flag,
+          nonce,
+          authdata_size
+         }).
 
 -record(ordinary_message, {
           src_id :: node_id(),
@@ -24,7 +29,7 @@
 
 -record(handshake_message, {
           authdata_head,
-          id_sginature,
+          id_signature,
           eph_pubkey,
           record
          }).

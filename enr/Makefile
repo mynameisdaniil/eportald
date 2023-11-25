@@ -6,6 +6,9 @@ ELVIS = ./elvis
 build:
 	$(REBAR) compile
 
+clean:
+	$(REBAR) clean
+
 run:
 	$(REBAR) shell
 
