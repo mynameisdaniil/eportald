@@ -1,1 +1,4 @@
-[].
+[{<<"rlp">>,
+  {git,"https://github.com/paulperegud/erlp.git",
+       {ref,"f969893fc9035d55333702cf5669c9eaf8e11c49"}},
+  0}].
