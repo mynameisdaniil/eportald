@@ -3,7 +3,7 @@
 -export([keccak_256/1]).
 -on_load(init/0).
 
--define(APPNAME, enr).
+-define(APPNAME, keccak).
 -define(LIBNAME, keccak).
 
 keccak_256(_) ->
