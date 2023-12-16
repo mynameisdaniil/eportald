@@ -3,19 +3,16 @@
 -include_lib("rlp_constants.hrl").
 
 %% API exports
--export([encode/1, decode/1]).
+-export([encode/1, decode/1, to_hex/1]).
 
 encode(Value) ->
-  do_encode(Value, <<>>).
+  do_encode(Value).
 
 decode(Binary) ->
   case do_decode(Binary, []) of
     {ok, [Ret]} -> {ok, Ret};
     {error, _} = E -> E
   end.
-
-do_encode(Value, Acc) ->
-  {ok, Acc}.
 
 % byte -> itself
 do_decode(<<Value:1/unsigned-big-integer-unit:8, Rest/binary>>, Acc)
@@ -94,3 +91,46 @@ extract_bytes(Len, Binary) ->
     _ ->
       {error, <<"Invalid RLP">>}
   end.
+
+%% Encode functions
+
+do_encode(<<Byte:1/binary>>) ->
+  {ok, Byte};
+
+do_encode(String)
+  when is_binary(String) ->
+  case byte_size(String) of
+    Size when Size =< ?RLP_SHORT_LENGTH ->
+      EncodedHeader = <<(?RLP_ZERO + Size):8/big-unsigned-integer>>,
+      {ok, <<EncodedHeader/binary, String/binary>>};
+    Size ->
+      LengthOfLength = binary:encode_unsigned(Size, big),
+      EncodedHeader =  <<(?RLP_SHORT_PAYLOAD_BORDER + byte_size(LengthOfLength)):8/big-unsigned-integer>>,
+      {ok, <<EncodedHeader/binary, LengthOfLength/binary, String/binary >>}
+  end;
+
+do_encode(List)
+  when is_list(List) ->
+  Encoded = lists:map(fun (Item) ->
+    {ok, EncodedItem} = do_encode(Item),
+    EncodedItem
+  end, List),
+  Binary = iolist_to_binary(Encoded),
+  case byte_size(Binary) of
+    Size when Size =< ?RLP_SHORT_LENGTH ->
+      EncodedHeader = <<(?RLP_SHORT_LIST_BORDER + Size):8/big-unsigned-integer>>,
+      {ok, <<EncodedHeader/binary, Binary/binary>>};
+    Size ->
+      LengthOfLength = binary:encode_unsigned(Size, big),
+      EncodedHeader = <<(?RLP_LONG_LIST_BORDER + byte_size(LengthOfLength)):8/big-unsigned-integer>>,
+      {ok, <<EncodedHeader/binary, LengthOfLength/binary, Binary/binary >>}
+  end;
+
+do_encode(_) ->
+  {error, <<"Can't encode">>}.
+
+%% Utils
+to_hex({ok, Bin}) ->
+  to_hex(Bin);
+to_hex(Bin) when is_binary(Bin) ->
+  io:format("~s\n", [[io_lib:format("~2.16.0B ",[X]) || <<X:8>> <= Bin ]]).
