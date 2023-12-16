@@ -127,7 +127,7 @@ do_encode(List)
   end;
 
 do_encode(_) ->
-  {error, <<"Can't encode">>}.
+  {error, <<"Can't encode this data">>}.
 
 %% Utils
 to_hex({ok, Bin}) ->

@@ -4,7 +4,7 @@
 -include_lib("src/rlp_constants.hrl").
 
 -export([all/0]).
--export([decode/1]).
+-export([decode/1, encode/1]).
 
 -define(DOG_STR, <<16#83, "dog">>).
 -define(CAT_DOG_LIST, <<16#c8, 16#83, "cat", 16#83, "dog">>).
@@ -16,7 +16,7 @@
 -define(SET_THEORETICAL_OF_THREE, <<16#c7, 16#c0, 16#c1, 16#c0, 16#c3, 16#c0, 16#c1, 16#c0>>).
 -define(STRING_LOREM_IPSUM, <<16#b8, 16#38, "Lorem ipsum dolor sit amet, consectetur adipisicing elit">>).
 
-all() -> [decode].
+all() -> [decode, encode].
 
 decode(_Config) ->
   {ok, <<"dog">>} = rlp:decode(?DOG_STR),
@@ -28,3 +28,14 @@ decode(_Config) ->
   {ok, <<16#04, 16#00>>} = rlp:decode(?ENCODED_INTEGER_1024),
   {ok, [ [], [[]], [ [], [[]] ] ]} = rlp:decode(?SET_THEORETICAL_OF_THREE),
   {ok, <<"Lorem ipsum dolor sit amet, consectetur adipisicing elit">>} = rlp:decode(?STRING_LOREM_IPSUM).
+
+encode(_Config) ->
+  {ok, <<16#83, "dog">>} = rlp:encode(<<"dog">>),
+  {ok, <<16#c8, 16#83, "cat", 16#83, "dog">>} = rlp:encode([<<"cat">>, <<"dog">>]),
+  {ok, <<16#80>>} = rlp:encode(<<"">>),
+  {ok, <<16#c0>>} = rlp:encode([]),
+  {ok, <<16#00>>} = rlp:encode(binary:encode_unsigned(0, big)),
+  {ok, <<16#0f>>} = rlp:encode(binary:encode_unsigned(15, big)),
+  {ok, <<16#82, 16#04, 16#00>>} = rlp:encode(binary:encode_unsigned(1024, big)),
+  {ok, <<16#c7, 16#c0, 16#c1, 16#c0, 16#c3, 16#c0, 16#c1, 16#c0>>} = rlp:encode([ [], [[]], [ [], [[]] ] ]),
+  {ok, <<16#b8, 16#38, "Lorem ipsum dolor sit amet, consectetur adipisicing elit">>} = rlp:encode(<<"Lorem ipsum dolor sit amet, consectetur adipisicing elit">>).
