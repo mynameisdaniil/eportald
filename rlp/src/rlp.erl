@@ -94,8 +94,11 @@ extract_bytes(Len, Binary) ->
 
 %% Encode functions
 
-do_encode(<<Byte:1/binary>>) ->
+do_encode(<<Byte:1/big-unsigned-integer-unit:8>>) when Byte < ?RLP_ZERO ->
   {ok, Byte};
+
+do_encode(Integer) when is_integer(Integer) andalso Integer >= 0 andalso Integer < ?RLP_ZERO ->
+  {ok, <<Integer:8/big-unsigned-integer>>};
 
 do_encode(String)
   when is_binary(String) ->
@@ -126,7 +129,8 @@ do_encode(List)
       {ok, <<EncodedHeader/binary, LengthOfLength/binary, Binary/binary >>}
   end;
 
-do_encode(_) ->
+do_encode(WTF) ->
+  io:format("RLP WTF: ~p~n", [WTF]),
   {error, <<"Can't encode this data">>}.
 
 %% Utils
