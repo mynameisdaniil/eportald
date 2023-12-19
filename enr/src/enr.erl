@@ -1,9 +1,10 @@
 -module(enr).
 
 -export([
-         encode/1,
+         encode/2,
          decode/1,
          test_vector_struct/0,
+         test_vector_privkey/0,
          test_vector_base64/0,
          test_vector_decode_base64/0,
          test_compressed/0
@@ -17,16 +18,26 @@
 }).
 
 -opaque enr_v4() :: #enr_v4{}.
--export_type([enr_v4/0]).
+-type priv_key() :: binary().
+-export_type([enr_v4/0, priv_key/0]).
 
--spec encode(enr_v4()) -> {ok, binary()} | {error, binary()}.
-encode(Record) ->
-  SortedKV = lists:sort(lists:uniq(Record#enr_v4.kv), fun ({A, _}, {B, _}) -> A < B end),
+-spec encode(enr_v4(), priv_key()) -> {ok, binary()} | {error, binary()}.
+encode(Record, PrivKey) ->
+  {ok, PubKey} = libsecp256k1:ec_pubkey_create(PrivKey, compressed),
+  SortedKV = lists:sort(fun ({A, _}, {B, _}) -> A > B end,
+               lists:uniq([
+                  {<<"id">>, <<"v4">>},
+                  {<<"secp256k1">>, PubKey} | Record#enr_v4.kv])),
   FlatKV = lists:foldl(fun ({Key, Value}, Acc) -> [Key, Value | Acc] end, [], SortedKV),
-  EncodedKV = rlp:encode(Record#enr_v4.kv),
-  Raw = <<>>,
-  Encoded = base64:encode(Raw, #{mode => urlsafe}),
-  Ret = <<"enr:"/binary, Encoded/binary>>,
+  Seq = Record#enr_v4.seq,
+  Content = [<<Seq>> | FlatKV],
+  {ok, EncodedKV} = rlp:encode(Content),
+  Digest = keccak:keccak_256(EncodedKV),
+  Signature = sign(Digest, PrivKey),
+  FullContent = [Signature | Content],
+  {ok, Raw} = rlp:encode(FullContent),
+  Encoded = base64:encode(Raw, #{mode => urlsafe, padding => false}),
+  Ret = <<<<"enr:">>/binary, Encoded/binary>>,
   {ok, Ret}.
 
 -spec decode(binary()) -> {ok, enr_v4()} | {error, binary()}.
@@ -56,7 +67,6 @@ decode(ENR) ->
   end.
 
 decode(signature, [Signature | Rest], Struct) ->
-  io:format("Signature: ~p~nRest: ~p~n", [Signature, Rest]),
   {ok, EncodedRest} = rlp:encode(Rest),
   ContentHash = keccak:keccak_256(EncodedRest),
   decode(seq, Rest, Struct#enr_v4{signature = Signature, content_hash = ContentHash});
@@ -64,15 +74,14 @@ decode(signature, [Signature | Rest], Struct) ->
 % TODO seq is 64 bit integer according to spec
 % but in fact it is not, it is variable in size from 1 to 4 bytes
 decode(seq, [Seq | Rest], Struct) ->
-  io:format("Seq: ~p~n", [Seq]),
   decode(id, Rest, Struct#enr_v4{seq = Seq});
 
 decode(id, [<<"id">>, ID | Rest], Struct) when ID == <<"v4">> ->
-  io:format("ID: ~p~n", [ID]),
   decode(pair, Rest, Struct#enr_v4{kv = [<<"id">>, ID]});
 
-decode(pair, [<<"secp256k1">> = Key, Value | Rest], #enr_v4{kv = KV, signature = Signature, content_hash = ContentHash} = Struct) ->
-  io:format("Key: ~p, Value: ~p\n", [Key, Value]),
+decode(pair,
+       [<<"secp256k1">> = Key, Value | Rest],
+       #enr_v4{kv = KV, signature = Signature, content_hash = ContentHash} = Struct) ->
   case verify(ContentHash, Signature, Value) of
     true ->
       decode(pair, Rest, Struct#enr_v4{kv = [{Key, Value}| KV]});
@@ -81,15 +90,12 @@ decode(pair, [<<"secp256k1">> = Key, Value | Rest], #enr_v4{kv = KV, signature =
   end;
 
 decode(pair, [Key, Value | Rest], #enr_v4{kv = KV} = Struct) ->
-  io:format("Key: ~p, Value: ~p\n", [Key, Value]),
   decode(pair, Rest, Struct#enr_v4{kv = [{Key, Value}| KV]});
 
 decode(pair, [], Struct) ->
-  io:format("Base case~n"),
   {ok, Struct};
 
-decode(Stage, List, State) ->
-  io:format("Stage: ~p, List: ~p, State: ~p~n", [Stage, List, State]),
+decode(_Stage, _List, _State) ->
   {error, <<"Cannot decode ENR">>}.
 
 verify(Digest, Signature, PubKey) ->
@@ -99,36 +105,28 @@ verify(Digest, Signature, PubKey) ->
     {error, _} -> false
   end.
 
-% sign(Content, PrivateKey) ->
-%   Digest = keccak:keccak_256(Content),
-%   {ok, Signature, RecoveryId} = libsecp256k1:ecdsa_sign_compact(Digest, PrivateKey, default, <<>>),
-%   io:format(">>> Signature: ~p~nRecoveryId: ~p~n", [Signature, RecoveryId]),
-%   Signature.
+sign(Digest, PrivKey) ->
+  {ok, Signature, _RecoveryId} = libsecp256k1:ecdsa_sign_compact(Digest, PrivKey, default, <<>>),
+  Signature.
 
 test_compressed() ->
-	Msg = <<"Test">>,
-	A = crypto:strong_rand_bytes(32),
-	{ok, Pubkey} = libsecp256k1:ec_pubkey_create(A, compressed),
-  io:format(">>> PubKey length: ~p~n", [byte_size(Pubkey)]),
-  io:format(">>> Pubkey: ~p~n", [Pubkey]),
-	{ok, Signature, _} = libsecp256k1:ecdsa_sign_compact(Msg, A, default, <<>>),
-  io:format(">>> Signature: ~p~n", [Signature]),
-  io:format(">>> Signature length: ~p~n", [byte_size(Signature)]),
+  Msg = <<"Test">>,
+  A = crypto:strong_rand_bytes(32),
+  {ok, Pubkey} = libsecp256k1:ec_pubkey_create(A, compressed),
+  {ok, Signature, _} = libsecp256k1:ecdsa_sign_compact(Msg, A, default, <<>>),
   libsecp256k1:ecdsa_verify_compact(Msg, Signature, Pubkey).
 
 test_vector_struct() ->
-  [
-   integer_to_binary(16#7098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c, 16),
-   integer_to_binary(16#01, 16),
-   <<"id">>,
-   <<"v4">>,
-   <<"ip">>,
-   integer_to_binary(16#7f000001, 16),
-   <<"secp256k1">>,
-   integer_to_binary(16#03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138, 16),
-   <<"udp">>,
-   integer_to_binary(16#765f, 16)
-  ].
+  #enr_v4{
+     seq = 1,
+     kv = [
+       {<<"ip">>, binary:decode_hex(<<"7f000001">>)},
+       {<<"udp">>, binary:decode_hex(<<"765f">>)}
+     ]
+  }.
+
+test_vector_privkey() ->
+  binary:decode_hex(<<"b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291">>).
 
 test_vector_base64() ->
   <<"enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8">>.
