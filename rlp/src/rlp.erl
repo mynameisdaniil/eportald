@@ -1,6 +1,6 @@
 -module(rlp).
 
--include_lib("rlp_constants.hrl").
+-include_lib("rlp.hrl").
 
 %% API exports
 -export([encode/1, decode/1, to_hex/1]).
@@ -94,8 +94,8 @@ extract_bytes(Len, Binary) ->
 
 %% Encode functions
 
-do_encode(<<Byte:1/big-unsigned-integer-unit:8>>) when Byte < ?RLP_ZERO ->
-  {ok, Byte};
+do_encode(<<Byte:1/big-unsigned-integer-unit:8>> = Bin) when Byte < ?RLP_ZERO ->
+  {ok, Bin};
 
 do_encode(Integer) when is_integer(Integer) andalso Integer >= 0 andalso Integer < ?RLP_ZERO ->
   {ok, <<Integer:8/big-unsigned-integer>>};

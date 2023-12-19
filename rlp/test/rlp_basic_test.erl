@@ -1,10 +1,8 @@
--module(basic_SUITE).
+-module(rlp_basic_test).
 
--include_lib("common_test/include/ct.hrl").
--include_lib("src/rlp_constants.hrl").
+-include_lib("eunit/include/eunit.hrl").
 
--export([all/0]).
--export([decode/1, encode/1]).
+-include_lib("src/rlp.hrl").
 
 -define(DOG_STR, <<16#83, "dog">>).
 -define(CAT_DOG_LIST, <<16#c8, 16#83, "cat", 16#83, "dog">>).
@@ -16,9 +14,8 @@
 -define(SET_THEORETICAL_OF_THREE, <<16#c7, 16#c0, 16#c1, 16#c0, 16#c3, 16#c0, 16#c1, 16#c0>>).
 -define(STRING_LOREM_IPSUM, <<16#b8, 16#38, "Lorem ipsum dolor sit amet, consectetur adipisicing elit">>).
 
-all() -> [decode, encode].
 
-decode(_Config) ->
+decode_test() ->
   {ok, <<"dog">>} = rlp:decode(?DOG_STR),
   {ok, [<<"cat">>, <<"dog">>]} = rlp:decode(?CAT_DOG_LIST),
   {ok, <<"">>} = rlp:decode(?EMPTY_STRING),
@@ -29,7 +26,7 @@ decode(_Config) ->
   {ok, [ [], [[]], [ [], [[]] ] ]} = rlp:decode(?SET_THEORETICAL_OF_THREE),
   {ok, <<"Lorem ipsum dolor sit amet, consectetur adipisicing elit">>} = rlp:decode(?STRING_LOREM_IPSUM).
 
-encode(_Config) ->
+encode_test() ->
   {ok, <<16#83, "dog">>} = rlp:encode(<<"dog">>),
   {ok, <<16#c8, 16#83, "cat", 16#83, "dog">>} = rlp:encode([<<"cat">>, <<"dog">>]),
   {ok, <<16#80>>} = rlp:encode(<<"">>),

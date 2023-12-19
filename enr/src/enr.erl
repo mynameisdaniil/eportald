@@ -1,7 +1,7 @@
 -module(enr).
 
 -export([
-         encode/2,
+         encode/3,
          decode/1,
          test_vector_struct/0,
          test_vector_privkey/0,
@@ -10,26 +10,23 @@
          test_compressed/0
         ]).
 
--record(enr_v4, {
-  signature    = <<>> :: nonempty_binary(),
-  content_hash = <<>> :: nonempty_binary(),
-  seq          = 0 :: non_neg_integer(),
-  kv           = [] :: list(tuple())
-}).
+-include_lib("enr.hrl").
 
 -opaque enr_v4() :: #enr_v4{}.
--type priv_key() :: binary().
--export_type([enr_v4/0, priv_key/0]).
+-export_type([enr_v4/0]).
 
--spec encode(enr_v4(), priv_key()) -> {ok, binary()} | {error, binary()}.
-encode(Record, PrivKey) ->
+-type priv_key() :: binary().
+-type kv() :: proplists:proplist().
+-type seq() :: non_neg_integer().
+
+-spec encode(seq(), kv(), priv_key()) -> {ok, binary()} | {error, binary()}.
+encode(Seq, KV, PrivKey) ->
   {ok, PubKey} = libsecp256k1:ec_pubkey_create(PrivKey, compressed),
   SortedKV = lists:sort(fun ({A, _}, {B, _}) -> A > B end,
                lists:uniq([
                   {<<"id">>, <<"v4">>},
-                  {<<"secp256k1">>, PubKey} | Record#enr_v4.kv])),
+                  {<<"secp256k1">>, PubKey} | KV])),
   FlatKV = lists:foldl(fun ({Key, Value}, Acc) -> [Key, Value | Acc] end, [], SortedKV),
-  Seq = Record#enr_v4.seq,
   Content = [<<Seq>> | FlatKV],
   {ok, EncodedKV} = rlp:encode(Content),
   Digest = keccak:keccak_256(EncodedKV),

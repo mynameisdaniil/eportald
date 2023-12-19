@@ -13,7 +13,7 @@ run:
 	$(REBAR) shell
 
 test:
-	$(REBAR) ct
+	$(REBAR) eunit
 
 elvis:
 	$(ELVIS) rock
