@@ -10,10 +10,13 @@ run:
 	$(REBAR) shell
 
 test:
-	$(REBAR) ct
+	$(REBAR) eunit
 
 elvis:
 	$(ELVIS) rock
 
 install:
 	$(REBAR) get-deps
+
+clean:
+	$(REBAR) clean
