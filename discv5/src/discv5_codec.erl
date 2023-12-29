@@ -3,7 +3,7 @@
 -export([decode/2]).
 -export_type([parse_result/0]).
 
--export([node_a_id/0, node_b_id/0, ping_msg/0, whoareyou_msg/0]).
+-export([node_a_id/0, node_b_id/0, ping_msg/0, whoareyou_msg/0, to_hex/1]).
 
 -include("discv5.hrl").
 
@@ -13,7 +13,7 @@
 
 -spec decode(binary(), binary()) -> parse_result().
 
--record(state, {static_header, authdata, bytes_to_decode, node_id, crypto, payload}).
+-record(state, {static_header, authdata, bytes_to_decode, node_id, crypto, payload, message_ad}).
 
 decode(Input, NodeId)
   when is_binary(Input)
@@ -29,46 +29,64 @@ do_decode(init_crypto, #state{bytes_to_decode = <<MaskingIV:16/binary, Rest/bina
                              node_id = <<MaskingKey:16/binary, _/binary>>} = State) ->
 
   Crypto = crypto:crypto_init(aes_128_ctr, MaskingKey, MaskingIV, [{encrypt, false}]),
-  do_decode(protocol_id, State#state{crypto = Crypto, bytes_to_decode = Rest});
+  do_decode(protocol_id, State#state{
+                           crypto = Crypto,
+                           bytes_to_decode = Rest,
+                           message_ad = [{masking_iv, MaskingIV}]
+                          });
 
 do_decode(protocol_id, #state{bytes_to_decode = <<ProtocolId:6/binary, Rest/binary>>,
-                             crypto = Crypto} = State) ->
+                              message_ad = MessageAd,
+                              crypto = Crypto} = State) ->
 
   case crypto:crypto_update(Crypto, ProtocolId) of
-    <<"discv5">> ->
-      do_decode(static_header, State#state{bytes_to_decode = Rest});
+    <<"discv5">> = DecodedProtocolID ->
+      do_decode(static_header, State#state{
+                                 bytes_to_decode = Rest,
+                                 message_ad = [{protocol_id, DecodedProtocolID} | MessageAd]
+                                });
 
     _ -> {error, "Incorrect protocol ID"}
   end;
 
 do_decode(static_header, #state{bytes_to_decode = <<StaticHeader:17/binary, Rest/binary>>,
-                               crypto = Crypto} = State) ->
+                                message_ad = MessageAd,
+                                crypto = Crypto} = State) ->
 
   case crypto:crypto_update(Crypto, StaticHeader) of
     <<Version:2/big-unsigned-integer-unit:8,
       Flag:1/big-unsigned-integer-unit:8,
       Nonce:12/big-unsigned-integer-unit:8,
-      AuthdataSize:2/big-unsigned-integer-unit:8>> ->
+      AuthdataSize:2/big-unsigned-integer-unit:8>> = DecodedStaticHeader ->
 
-      DecodedStaticHeader = #static_header{
-                               version       = Version,
-                               flag          = Flag,
-                               nonce         = Nonce,
-                               authdata_size = AuthdataSize
-                              },
-      do_decode(authdata, State#state{bytes_to_decode = Rest, static_header = DecodedStaticHeader});
+      StaticHeaderRecord = #static_header{
+                              version       = Version,
+                              flag          = Flag,
+                              nonce         = Nonce,
+                              authdata_size = AuthdataSize
+                             },
+      do_decode(authdata, State#state{
+                            bytes_to_decode = Rest,
+                            static_header = StaticHeaderRecord,
+                            message_ad = [{static_header, DecodedStaticHeader} | MessageAd]
+                           });
 
     _ -> {error, "Cannot parse static header"}
   end;
 
 do_decode(authdata, #state{bytes_to_decode = Input,
                           static_header = #static_header{authdata_size = AuthdataSize},
+                          message_ad = MessageAd,
                           crypto = Crypto} = State) ->
 
   case Input of
     <<AuthData:AuthdataSize/binary, Rest/binary>> ->
       DecodedAuthData = crypto:crypto_update(Crypto, AuthData),
-      do_decode(finalize_crypto, State#state{bytes_to_decode = Rest, authdata = DecodedAuthData});
+      do_decode(finalize_crypto, State#state{
+                                   bytes_to_decode = Rest,
+                                   authdata = DecodedAuthData,
+                                   message_ad = [{authdata, DecodedAuthData} | MessageAd]
+                                  });
 
     _ -> {error, "Cannot parse AuthData"}
   end;
@@ -99,8 +117,23 @@ do_decode(message, #state{bytes_to_decode = Payload, authdata = AuthData} = Stat
   OrdinaryMsg = #ordinary_message{src_id = AuthData, data = Payload},
   do_decode(message_data, State#state{payload = OrdinaryMsg});
 
-do_decode(message_data, #state{payload = OrdinaryMsg} = State) ->
-  io:format(">>>Ordinary message: ~p~n", [OrdinaryMsg]),
+do_decode(message_data, #state{
+                           payload = #ordinary_message{data = OrdinaryMsg},
+                           static_header = #static_header{nonce = Nonce},
+                           message_ad = MessageAdProplist
+                          } = State) ->
+
+  MessageAd = lists:foldl(fun({_Key, Value}, Acc) ->
+                             <<Value/binary, Acc/binary>>
+                           end, <<>>, MessageAdProplist),
+  Key = binary:decode_hex(<<"00000000000000000000000000000000">>),
+  %% TODO: rewrite this to use offsets in the binary, rather than copying
+  BinaryNonce = binary:encode_unsigned(Nonce),
+  OrdinaryMsgLen = byte_size(OrdinaryMsg),
+  <<EncryptedData:(OrdinaryMsgLen - ?TAG_LEN)/binary, Tag/binary>> = OrdinaryMsg,
+  io:format(">>>\nKey: ~p\nNonce: ~p\nEncrypted: ~p\nAD: ~p\nTag: ~p\nTag len: ~p\n", [Key, BinaryNonce, EncryptedData, MessageAd, Tag, byte_size(Tag)]),
+  Result = crypto:crypto_one_time_aead(aes_128_gcm, Key, BinaryNonce, EncryptedData, MessageAd, Tag, false),
+  io:format(">>>Ordinary message decode: ~p~n", [Result]),
   {ok, State};
 
 do_decode(whoareyou, #state{static_header = #static_header{authdata_size = AuthdataSize}})
@@ -154,3 +187,11 @@ ping_msg() ->
 
 whoareyou_msg() ->
   binary:decode_hex(<<"00000000000000000000000000000000088b3d434277464933a1ccc59f5967ad1d6035f15e528627dde75cd68292f9e6c27d6b66c8100a873fcbaed4e16b8d">>).
+
+
+to_hex({ok, Bin}) ->
+  to_hex(Bin);
+to_hex(Int) when is_integer(Int) ->
+  to_hex(binary:encode_unsigned(Int));
+to_hex(Bin) when is_binary(Bin) ->
+  io_lib:format("~s\n", [[io_lib:format("~2.16.0b",[X]) || <<X:8>> <= Bin ]]).

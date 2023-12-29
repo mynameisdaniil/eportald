@@ -7,6 +7,8 @@
 -define(MAX_UNSIGNED_256_BIT, (1 bsl 256) - 1).
 -define(MAX_UNSIGNED_128_BIT, (1 bsl 128) - 1).
 
+-define(TAG_LEN, 16).
+
 -type node_id() :: 0..?MAX_UNSIGNED_256_BIT.
 -type masking_iv() :: 0..?MAX_UNSIGNED_128_BIT.
 
