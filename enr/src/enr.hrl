@@ -7,5 +7,7 @@
   kv           = [] :: list(tuple())
 }).
 
+-type enr() :: binary().
+
 -define(ENR, 1).
 -endif.

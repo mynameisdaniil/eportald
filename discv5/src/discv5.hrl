@@ -42,5 +42,65 @@
           eph_key_size
          }).
 
+-record(ping, {
+          request_id,
+          enr_seq
+         }).
+
+-record(pong, {
+          request_id,
+          enr_seq,
+          recipient_ip,
+          recipient_port
+         }).
+
+-record(findnode, {
+          request_id,
+          distances :: list(distance()),
+          enr_seq
+         }).
+
+-record(nodes, {
+          request_id,
+          total,
+          enrs :: list(enr:enr())
+         }).
+
+-record(talkreq, {
+          request_id,
+          protocol :: rlp:rlp(),
+          request :: rlp:rlp()
+         }).
+
+-record(talkresp, {
+          request_id,
+          response :: rlp:rlp()
+         }).
+
+-record(regtopic, {
+          request_id,
+          topic :: binary(),
+          enr :: enr:enr(),
+          ticket :: rlp:rlp()
+         }).
+
+-record(ticket, {
+          request_id,
+          ticket :: rlp:rlp(),
+          wait_time :: integer()
+         }).
+
+-record(regconfirmation, {
+          request_id,
+          topic :: binary()
+         }).
+
+-record(topicquery, {
+          request_id,
+          topic :: binary()
+         }).
+
+-type distance() :: 0..255. % TODO: is the 255 really max value possible?
+
 -define(DISCV5, 1).
 -endif.

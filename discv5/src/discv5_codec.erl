@@ -13,7 +13,16 @@
 
 -spec decode(binary(), binary()) -> parse_result().
 
--record(state, {static_header, authdata, bytes_to_decode, node_id, crypto, payload, message_ad}).
+-record(state, {
+          static_header,
+          authdata,
+          bytes_to_decode,
+          node_id,
+          crypto,
+          payload,
+          message_ad,
+          decode_key = <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
+         }).
 
 decode(Input, NodeId)
   when is_binary(Input)
@@ -120,21 +129,27 @@ do_decode(message, #state{bytes_to_decode = Payload, authdata = AuthData} = Stat
 do_decode(message_data, #state{
                            payload = #ordinary_message{data = OrdinaryMsg},
                            static_header = #static_header{nonce = Nonce},
-                           message_ad = MessageAdProplist
+                           message_ad = MessageAdProplist,
+                           decode_key = Key
                           } = State) ->
 
+  %% TODO: rewrite this to use offsets in the binary, rather than copying
   MessageAd = lists:foldl(fun({_Key, Value}, Acc) ->
                              <<Value/binary, Acc/binary>>
                            end, <<>>, MessageAdProplist),
-  Key = binary:decode_hex(<<"00000000000000000000000000000000">>),
-  %% TODO: rewrite this to use offsets in the binary, rather than copying
   BinaryNonce = binary:encode_unsigned(Nonce),
   OrdinaryMsgLen = byte_size(OrdinaryMsg),
   <<EncryptedData:(OrdinaryMsgLen - ?TAG_LEN)/binary, Tag/binary>> = OrdinaryMsg,
-  io:format(">>>\nKey: ~p\nNonce: ~p\nEncrypted: ~p\nAD: ~p\nTag: ~p\nTag len: ~p\n", [Key, BinaryNonce, EncryptedData, MessageAd, Tag, byte_size(Tag)]),
-  Result = crypto:crypto_one_time_aead(aes_128_gcm, Key, BinaryNonce, EncryptedData, MessageAd, Tag, false),
-  io:format(">>>Ordinary message decode: ~p~n", [Result]),
-  {ok, State};
+  Result = crypto:crypto_one_time_aead(
+             aes_128_gcm,
+             Key,
+             BinaryNonce,
+             EncryptedData,
+             MessageAd,
+             Tag,
+             false
+            ),
+  decode_protocol_message(Result);
 
 do_decode(whoareyou, #state{static_header = #static_header{authdata_size = AuthdataSize}})
   when AuthdataSize /= 24 ->
@@ -173,6 +188,21 @@ do_decode(handshake, #state{authdata = Authdata,
 do_decode(Stage, #state{bytes_to_decode = BytesToDecode} = State) ->
   io:format(">>>WTF\n Stage: ~p\n State: ~p\n BytesToDecode: ~p\n", [Stage, State, BytesToDecode]),
   {error, unexpected}.
+
+decode_protocol_message(<<MsgType:8/big-unsigned-integer, EncodedMsg/binary>>) ->
+  {ok, [RequestId | DecodedMsg]} = rlp:decode(EncodedMsg),
+  case MsgType of
+    16#01 ->
+      [EnrSeq] = DecodedMsg,
+      {ok, #ping{
+              request_id = RequestId,
+              enr_seq    = EnrSeq
+             }}
+  end;
+
+decode_protocol_message(_) ->
+  io:format(">>>WTF unknown protocl message\n"),
+  {error, "Unknown message type"}.
 
 node_a_id() ->
   binary:decode_hex(<<"aaaa8419e9f49d0083561b48287df592939a8d19947d8c0ef88f2a4856a69fbb">>).

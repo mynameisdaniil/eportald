@@ -8,4 +8,7 @@
 -define(RLP_SHORT_LENGTH, 55).
 
 -define(RLP_CONSTANTS, 1).
+
+-type rlp() :: binary().
+
 -endif.
