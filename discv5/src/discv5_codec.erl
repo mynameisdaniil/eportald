@@ -3,7 +3,7 @@
 -export([decode/2]).
 -export_type([parse_result/0]).
 
--export([node_a_id/0, node_b_id/0, ping_msg/0, whoareyou_msg/0, to_hex/1]).
+-export([node_a_id/0, node_b_id/0, ping_msg/0, whoareyou_msg/0, to_hex/1, handshake_msg/0]).
 
 -include("discv5.hrl").
 
@@ -21,7 +21,24 @@
           crypto,
           payload,
           message_ad,
-          decode_key = <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
+          handshake,
+          % decode_key = <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
+          decode_key = <<16#4f,
+                         16#9f,
+                         16#ac,
+                         16#6d,
+                         16#e7,
+                         16#56,
+                         16#7d,
+                         16#1e,
+                         16#3b,
+                         16#12,
+                         16#41,
+                         16#df,
+                         16#fe,
+                         16#90,
+                         16#f6,
+                         16#62>>
          }).
 
 decode(Input, NodeId)
@@ -156,16 +173,16 @@ do_decode(whoareyou, #state{static_header = #static_header{authdata_size = Authd
   {error, "Incorrect Authdata size"};
 
 do_decode(whoareyou, #state{authdata = <<IdNonce:16/big-unsigned-integer-unit:8,
-                                         EnrSeq:8/big-unsigned-integer-unit:8>>} = State) ->
+                                         EnrSeq:8/big-unsigned-integer-unit:8>>}) ->
   WhoAreYou = #whoareyou_message{id_nonce = IdNonce, enr_seq = EnrSeq},
-  {ok, State#state{payload = WhoAreYou}};
+  {ok, WhoAreYou};
 
 do_decode(handshake, #state{static_header = #static_header{authdata_size = AuthdataSize}})
   when AuthdataSize < 34 ->
   {error, "Invalid Authdata size"};
 
-do_decode(handshake, #state{authdata = Authdata,
-                           static_header = #static_header{authdata_size = AuthdataSize}} = State) ->
+do_decode(handshake, #state{authdata = Authdata, bytes_to_decode = BytesToDecode,
+                           static_header = #static_header{authdata_size = AuthdataSize} = StaticHeader} = State) ->
   <<SrcId:32/binary,
     SigSize:1/big-unsigned-integer-unit:8,
     EphKeySize:1/big-unsigned-integer-unit:8,
@@ -175,15 +192,23 @@ do_decode(handshake, #state{authdata = Authdata,
                     sig_size     = SigSize,
                     eph_key_size = EphKeySize
                    },
-  RecordLen = AuthdataSize - (34 + 1 + 1),
-  <<IdSignature:SigSize/binary, EphPubkey:EphKeySize/binary, Record:RecordLen/binary>> = Rest,
+  RecordLen = AuthdataSize - (34 + SigSize + EphKeySize),
+  <<IdSignature:SigSize/binary, EphPubkey:EphKeySize/binary, EncodedRecord:RecordLen/binary>> = Rest,
+  Record = case enr:decode(EncodedRecord) of
+           {ok, Rec} -> Rec;
+           {error, _} -> nil
+         end,
   Handshake = #handshake_message{
                  authdata_head = AuthdataHead,
                  id_signature  = IdSignature,
                  eph_pubkey    = EphPubkey,
                  record        = Record
                 },
-  do_decode(message, State#state{payload = Handshake});
+  % TODO fill in src_id in #ordinary message
+  do_decode(message_data, State#state{
+                            payload = #ordinary_message{data = BytesToDecode},
+                            handshake = Handshake
+                           });
 
 do_decode(Stage, #state{bytes_to_decode = BytesToDecode} = State) ->
   io:format(">>>WTF\n Stage: ~p\n State: ~p\n BytesToDecode: ~p\n", [Stage, State, BytesToDecode]),
@@ -204,6 +229,8 @@ decode_protocol_message(_) ->
   io:format(">>>WTF unknown protocl message\n"),
   {error, "Unknown message type"}.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 node_a_id() ->
   binary:decode_hex(<<"aaaa8419e9f49d0083561b48287df592939a8d19947d8c0ef88f2a4856a69fbb">>).
 
@@ -216,8 +243,17 @@ ping_msg() ->
                       "ed931f66d1492acb308fa1c6715b9d139b81acbdcc">>).
 
 whoareyou_msg() ->
-  binary:decode_hex(<<"00000000000000000000000000000000088b3d434277464933a1ccc59f5967ad1d6035f15e528627dde75cd68292f9e6c27d6b66c8100a873fcbaed4e16b8d">>).
+  binary:decode_hex(<<"00000000000000000000000000000000088b3d434277464933a1ccc59f5967ad1d6035f15e",
+                      "528627dde75cd68292f9e6c27d6b66c8100a873fcbaed4e16b8d">>).
 
+
+handshake_msg() ->
+  binary:decode_hex(<<"00000000000000000000000000000000088b3d4342774649305f313964a39e55ea96c005ad",
+                      "521d8c7560413a7008f16c9e6d2f43bbea8814a546b7409ce783d34c4f53245d08da4bb252",
+                      "012b2cba3f4f374a90a75cff91f142fa9be3e0a5f3ef268ccb9065aeecfd67a999e7fdc137",
+                      "e062b2ec4a0eb92947f0d9a74bfbf44dfba776b21301f8b65efd5796706adff216ab862a91",
+                      "86875f9494150c4ae06fa4d1f0396c93f215fa4ef524f1eadf5f0f4126b79336671cbcf7a8",
+                      "85b1f8bd2a5d839cf8">>).
 
 to_hex({ok, Bin}) ->
   to_hex(Bin);

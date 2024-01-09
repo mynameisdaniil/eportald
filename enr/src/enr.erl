@@ -38,11 +38,13 @@ encode(Seq, KV, PrivKey) ->
   {ok, Ret}.
 
 -spec decode(binary()) -> {ok, enr_v4()} | {error, binary()}.
+% TODO not applicable for RLP-encoded ENR
 % Max length of ENR is 300 bytes according to spec
 % https://github.com/ethereum/devp2p/blob/master/enr.md#rlp-encoding
 decode(ENR) when byte_size(ENR) > 300 ->
   {error, <<"ENR is too long">>};
 
+% TODO not applicable for RLP-encoded ENR
 % Minimal ENR is 64 + 8 + 2 + 33 bytes
 % 64 bytes is sginature
 % 8 bytes is 64 bit seq
@@ -52,8 +54,7 @@ decode(ENR) when byte_size(ENR) > 300 ->
 decode(ENR) when byte_size(ENR) < 118 ->
   {error, <<"ENR is too short">>};
 
-decode(ENR) ->
-  [Encoded] = binary:split(ENR, <<"enr:">>, [trim_all]),
+decode(<<"enr:", Encoded/binary>>) ->
   Raw = base64:decode(Encoded, #{mode => urlsafe, padding => false}),
   {ok, List} = rlp:decode(Raw),
   case decode(signature, List, #enr_v4{}) of
