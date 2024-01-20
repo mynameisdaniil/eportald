@@ -33,7 +33,8 @@
           authdata_head,
           id_signature,
           eph_pubkey,
-          record
+          record,
+          data :: binary()
          }).
 
 -record(authdata_head, {
