@@ -168,7 +168,7 @@ do_decode(handshake, #state{authdata = Authdata, bytes_to_decode = BytesToDecode
                    },
   RecordLen = AuthdataSize - (34 + SigSize + EphKeySize),
   <<IdSignature:SigSize/binary, EphPubkey:EphKeySize/binary, EncodedRecord:RecordLen/binary>> = Rest,
-  Record = case enr:decode(EncodedRecord) of
+  Record = case rlp:decode(EncodedRecord) of
            {ok, Rec} -> Rec;
            {error, _} -> nil
          end,
@@ -204,7 +204,7 @@ decode_protocol_message(Key, Encrypted, Meta) ->
             ),
   case Result of
     error ->
-      {error, "Cannot descrypt message"};
+      {error, "Cannot decrypt message"};
     DecryptedData ->
       do_decode_protocol_message(DecryptedData)
   end.

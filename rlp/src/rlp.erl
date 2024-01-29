@@ -8,6 +8,9 @@
 encode(Value) ->
   do_encode(Value).
 
+decode(<<>>) ->
+  {error, <<"Empty RLP">>};
+
 decode(Binary) ->
   case do_decode(Binary, []) of
     {ok, [Ret]} -> {ok, Ret};
