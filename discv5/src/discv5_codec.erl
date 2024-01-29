@@ -1,6 +1,6 @@
 -module(discv5_codec).
 
--export([decode_packet/2, decode_protocol_message/1]).
+-export([decode_packet/2, decode_protocol_message/3]).
 -export_type([parse_result/0]).
 
 -export([node_a_id/0,
@@ -26,24 +26,7 @@
           bytes_to_decode,
           node_id,
           crypto,
-          message_ad,
-          decode_key = <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0>>
-          % decode_key = <<16#4f,
-          %                16#9f,
-          %                16#ac,
-          %                16#6d,
-          %                16#e7,
-          %                16#56,
-          %                16#7d,
-          %                16#1e,
-          %                16#3b,
-          %                16#12,
-          %                16#41,
-          %                16#df,
-          %                16#fe,
-          %                16#90,
-          %                16#f6,
-          %                16#62>>
+          message_ad
          }).
 
 decode_packet(Input, NodeId)
@@ -87,7 +70,7 @@ do_decode(static_header, #state{bytes_to_decode = <<StaticHeader:17/binary, Rest
   case crypto:crypto_update(Crypto, StaticHeader) of
     <<Version:2/big-unsigned-integer-unit:8,
       Flag:1/big-unsigned-integer-unit:8,
-      Nonce:12/big-unsigned-integer-unit:8,
+      Nonce:12/binary,
       AuthdataSize:2/big-unsigned-integer-unit:8>> = DecodedStaticHeader ->
 
       StaticHeaderRecord = #static_header{
@@ -129,7 +112,7 @@ do_decode(finalize_crypto, #state{crypto = Crypto} = State) ->
 do_decode(decode_flag, #state{static_header = #static_header{flag = Flag}} = State) ->
   case Flag of
     ?ORDINARY_MSG_FLAG ->
-      do_decode(message, State#state{});
+      do_decode(ordinary_message, State#state{});
 
     ?WHOAREYOU_MSG_FLAG ->
       do_decode(whoareyou, State#state{});
@@ -140,43 +123,29 @@ do_decode(decode_flag, #state{static_header = #static_header{flag = Flag}} = Sta
     _ -> {error, "Unknown flag."}
   end;
 
-do_decode(message, #state{static_header = #static_header{authdata_size = AuthdataSize}})
+do_decode(ordinary_message, #state{static_header = #static_header{authdata_size = AuthdataSize}})
   when AuthdataSize /= 32 ->
   {error, "Incorrect Authdata size"};
 
-do_decode(message, #state{bytes_to_decode = Payload,
+do_decode(ordinary_message, #state{bytes_to_decode = Payload,
                           authdata        = SrcId,
                           static_header   = #static_header{nonce = Nonce},
-                          message_ad      = MessageAdProplist,
-                          decode_key      = Key}) ->
+                          message_ad      = MessageAdProplist}) ->
   %% TODO: rewrite this to use offsets in the binary, rather than copying
   MessageAd = lists:foldl(fun({_Key, Value}, Acc) ->
                              <<Value/binary, Acc/binary>>
                            end, <<>>, MessageAdProplist),
-  BinaryNonce = binary:encode_unsigned(Nonce),
-  OrdinaryMsgLen = byte_size(Payload),
-  <<EncryptedData:(OrdinaryMsgLen - ?TAG_LEN)/binary, Tag/binary>> = Payload,
-  Result = crypto:crypto_one_time_aead(
-             aes_128_gcm,
-             Key,
-             BinaryNonce,
-             EncryptedData,
-             MessageAd,
-             Tag,
-             false
-            ),
-  case Result of
-    error ->
-      {error, "Cannot descrypt message"};
-    DecryptedData ->
-      {ok, #ordinary_message{data = DecryptedData, src_id = SrcId}}
-  end;
+  {ok, #ordinary_message{
+          data   = Payload,
+          src_id = SrcId,
+          meta   = #meta{nonce      = Nonce,
+                         message_ad = MessageAd}}};
 
 do_decode(whoareyou, #state{static_header = #static_header{authdata_size = AuthdataSize}})
   when AuthdataSize /= 24 ->
   {error, "Incorrect Authdata size"};
 
-do_decode(whoareyou, #state{authdata = <<IdNonce:16/big-unsigned-integer-unit:8,
+do_decode(whoareyou, #state{authdata = <<IdNonce:16/binary,
                                          EnrSeq:8/big-unsigned-integer-unit:8>>}) ->
   WhoAreYou = #whoareyou_message{id_nonce = IdNonce, enr_seq = EnrSeq},
   {ok, WhoAreYou};
@@ -186,7 +155,8 @@ do_decode(handshake, #state{static_header = #static_header{authdata_size = Authd
   {error, "Invalid Authdata size"};
 
 do_decode(handshake, #state{authdata = Authdata, bytes_to_decode = BytesToDecode,
-                           static_header = #static_header{authdata_size = AuthdataSize}}) ->
+                           static_header = #static_header{authdata_size = AuthdataSize},
+                           message_ad = MessageAdProplist}) ->
   <<SrcId:32/binary,
     SigSize:1/big-unsigned-integer-unit:8,
     EphKeySize:1/big-unsigned-integer-unit:8,
@@ -202,20 +172,44 @@ do_decode(handshake, #state{authdata = Authdata, bytes_to_decode = BytesToDecode
            {ok, Rec} -> Rec;
            {error, _} -> nil
          end,
+  MessageAd = lists:foldl(fun({_Key, Value}, Acc) ->
+                             <<Value/binary, Acc/binary>>
+                           end, <<>>, MessageAdProplist),
   Handshake = #handshake_message{
                  authdata_head = AuthdataHead,
                  id_signature  = IdSignature,
                  eph_pubkey    = EphPubkey,
                  record        = Record,
-                 data          = BytesToDecode
-                },
+                 data          = BytesToDecode,
+                 meta          = #meta{message_ad = MessageAd}},
   {ok, Handshake};
 
 do_decode(Stage, #state{bytes_to_decode = BytesToDecode} = State) ->
   io:format(">>>WTF\n Stage: ~p\n State: ~p\n BytesToDecode: ~p\n", [Stage, State, BytesToDecode]),
   {error, unexpected}.
 
-decode_protocol_message(<<MsgType:8/big-unsigned-integer, EncodedMsg/binary>>) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+decode_protocol_message(Key, Encrypted, Meta) ->
+  #meta{message_ad = MessageAd, nonce = Nonce} = Meta,
+  DataLen = byte_size(Encrypted),
+  <<Data:(DataLen - ?TAG_LEN)/binary, Tag/binary>> = Encrypted,
+  Result = crypto:crypto_one_time_aead(
+             aes_128_gcm,
+             Key,
+             Nonce,
+             Data,
+             MessageAd,
+             Tag,
+             false
+            ),
+  case Result of
+    error ->
+      {error, "Cannot descrypt message"};
+    DecryptedData ->
+      do_decode_protocol_message(DecryptedData)
+  end.
+
+do_decode_protocol_message(<<MsgType:8/big-unsigned-integer, EncodedMsg/binary>>) ->
   {ok, [RequestId | DecodedMsg]} = rlp:decode(EncodedMsg),
   case MsgType of
     16#01 ->
@@ -223,7 +217,7 @@ decode_protocol_message(<<MsgType:8/big-unsigned-integer, EncodedMsg/binary>>) -
       {ok, #ping{request_id = RequestId, enr_seq = EnrSeq}}
   end;
 
-decode_protocol_message(_) ->
+do_decode_protocol_message(_) ->
   {error, "Unknown message type"}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

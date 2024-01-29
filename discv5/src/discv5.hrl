@@ -19,14 +19,20 @@
           authdata_size
          }).
 
+-record(meta, {
+          nonce :: binary(),
+          message_ad :: binary()
+         }).
+
 -record(ordinary_message, {
           src_id :: node_id(),
-          data :: binary()
+          data :: binary(),
+          meta :: #meta{}
          }).
 
 -record(whoareyou_message, {
-          id_nonce,
-          enr_seq
+          id_nonce :: binary(), % uint128
+          enr_seq :: non_neg_integer() % uint64
          }).
 
 -record(handshake_message, {
@@ -34,7 +40,8 @@
           id_signature,
           eph_pubkey,
           record,
-          data :: binary()
+          data :: binary(),
+          meta :: #meta{}
          }).
 
 -record(authdata_head, {
@@ -44,8 +51,8 @@
          }).
 
 -record(ping, {
-          request_id,
-          enr_seq
+          request_id :: binary(), % byte array <= 8 bytes
+          enr_seq :: non_neg_integer()
          }).
 
 -record(pong, {
