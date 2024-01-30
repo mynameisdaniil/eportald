@@ -2,6 +2,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("src/discv5.hrl").
+-include_lib("../enr/src/enr.hrl").
 
 -define(PING_MSG,
         binary:decode_hex(<<"00000000000000000000000000000000088b3d4342774649325f313964a39e55ea96c005ad",
@@ -91,6 +92,7 @@ decode_handshake_ping_with_enr_test() ->
     } = Handshake,
   io:format(">>> Record: ~p~n", [Record]),
   ?assertEqual(?SRC_NODE_ID, SrcId),
+  ?assertMatch(#enr_v4{}, Record),
   % ?assertEqual(<<>>, IdSignature),
   ?assertEqual(binary:decode_hex(<<"039a003ba6517b473fa0cd74aefe99dadfdb34627f90fec6362df85803908f53a5">>), EphemeralPubkey),
   Nonce = binary:decode_hex(<<"ffffffffffffffffffffffff">>),

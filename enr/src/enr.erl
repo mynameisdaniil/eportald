@@ -3,6 +3,7 @@
 -export([
          encode/3,
          decode/1,
+         decode_rlp/1,
          test_vector_struct/0,
          test_vector_privkey/0,
          test_vector_base64/0,
@@ -57,9 +58,12 @@ decode(ENR) when byte_size(ENR) < 118 ->
 decode(<<"enr:", Encoded/binary>>) ->
   Raw = base64:decode(Encoded, #{mode => urlsafe, padding => false}),
   {ok, List} = rlp:decode(Raw),
-  case decode(signature, List, #enr_v4{}) of
-    {ok, Struct} ->
-      {ok, Struct};
+  decode(signature, List, #enr_v4{}).
+
+decode_rlp(RlpEncoded) ->
+  case rlp:decode(RlpEncoded) of
+    {ok, List} ->
+      decode(signature, List, #enr_v4{});
     {error, Reason} ->
       {error, Reason}
   end.

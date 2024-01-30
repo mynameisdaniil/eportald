@@ -168,7 +168,7 @@ do_decode(handshake, #state{authdata = Authdata, bytes_to_decode = BytesToDecode
                    },
   RecordLen = AuthdataSize - (34 + SigSize + EphKeySize),
   <<IdSignature:SigSize/binary, EphPubkey:EphKeySize/binary, EncodedRecord:RecordLen/binary>> = Rest,
-  Record = case rlp:decode(EncodedRecord) of
+  Record = case enr:decode_rlp(EncodedRecord) of
            {ok, Rec} -> Rec;
            {error, _} -> nil
          end,
