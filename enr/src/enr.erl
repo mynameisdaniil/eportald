@@ -3,12 +3,7 @@
 -export([
          encode/3,
          decode/1,
-         decode_rlp/1,
-         test_vector_struct/0,
-         test_vector_privkey/0,
-         test_vector_base64/0,
-         test_vector_decode_base64/0,
-         test_compressed/0
+         decode_rlp/1
         ]).
 
 -include_lib("enr.hrl").
@@ -110,35 +105,3 @@ verify(Digest, Signature, PubKey) ->
 sign(Digest, PrivKey) ->
   {ok, Signature, _RecoveryId} = libsecp256k1:ecdsa_sign_compact(Digest, PrivKey, default, <<>>),
   Signature.
-
-test_compressed() ->
-  Msg = <<"Test">>,
-  A = crypto:strong_rand_bytes(32),
-  {ok, Pubkey} = libsecp256k1:ec_pubkey_create(A, compressed),
-  {ok, Signature, _} = libsecp256k1:ecdsa_sign_compact(Msg, A, default, <<>>),
-  libsecp256k1:ecdsa_verify_compact(Msg, Signature, Pubkey).
-
-test_vector_struct() ->
-  #enr_v4{
-     seq = 1,
-     kv = [
-       {<<"ip">>, binary:decode_hex(<<"7f000001">>)},
-       {<<"udp">>, binary:decode_hex(<<"765f">>)}
-     ]
-  }.
-
-test_vector_privkey() ->
-  binary:decode_hex(<<"b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291">>).
-
-test_vector_base64() ->
-  <<"enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8">>.
-
-test_vector_decode_base64() ->
-  [Encoded] = binary:split(test_vector_base64(), <<"enr:">>, [trim_all]),
-  base64:decode(Encoded, #{mode => urlsafe, padding => false}).
-
-
-to_hex({ok, Bin}) ->
-  to_hex(Bin);
-to_hex(Bin) when is_binary(Bin) ->
-  io_lib:format("~s\n", [[io_lib:format("~2.16.0B ",[X]) || <<X:8>> <= Bin ]]).

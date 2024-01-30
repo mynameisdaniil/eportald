@@ -3,15 +3,6 @@
 -export([decode_packet/2, decode_protocol_message/3]).
 -export_type([parse_result/0]).
 
--export([node_a_id/0,
-         node_b_id/0,
-         ping_msg/0,
-         whoareyou_msg/0,
-         to_hex/1,
-         handshake_msg/0,
-         handshake_msg_with_enr/0
-        ]).
-
 -include("discv5.hrl").
 
 -type parse_result() ::
@@ -219,48 +210,3 @@ do_decode_protocol_message(<<MsgType:8/big-unsigned-integer, EncodedMsg/binary>>
 
 do_decode_protocol_message(_) ->
   {error, "Unknown message type"}.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-node_a_id() ->
-  binary:decode_hex(<<"aaaa8419e9f49d0083561b48287df592939a8d19947d8c0ef88f2a4856a69fbb">>).
-
-node_b_id() ->
-  binary:decode_hex(<<"bbbb9d047f0488c0b5a93c1c3f2d8bafc7c8ff337024a55434a0d0555de64db9">>).
-
-ping_msg() ->
-  binary:decode_hex(<<"00000000000000000000000000000000088b3d4342774649325f313964a39e55ea96c005ad",
-                      "52be8c7560413a7008f16c9e6d2f43bbea8814a546b7409ce783d34c4f53245d08dab84102",
-                      "ed931f66d1492acb308fa1c6715b9d139b81acbdcc">>).
-
-whoareyou_msg() ->
-  binary:decode_hex(<<"00000000000000000000000000000000088b3d434277464933a1ccc59f5967ad1d6035f15e",
-                      "528627dde75cd68292f9e6c27d6b66c8100a873fcbaed4e16b8d">>).
-
-
-handshake_msg() ->
-  binary:decode_hex(<<"00000000000000000000000000000000088b3d4342774649305f313964a39e55ea96c005ad",
-                      "521d8c7560413a7008f16c9e6d2f43bbea8814a546b7409ce783d34c4f53245d08da4bb252",
-                      "012b2cba3f4f374a90a75cff91f142fa9be3e0a5f3ef268ccb9065aeecfd67a999e7fdc137",
-                      "e062b2ec4a0eb92947f0d9a74bfbf44dfba776b21301f8b65efd5796706adff216ab862a91",
-                      "86875f9494150c4ae06fa4d1f0396c93f215fa4ef524f1eadf5f0f4126b79336671cbcf7a8",
-                      "85b1f8bd2a5d839cf8">>).
-
-handshake_msg_with_enr() ->
-  binary:decode_hex(<<"00000000000000000000000000000000088b3d4342774649305f313964a39e55",
-                      "ea96c005ad539c8c7560413a7008f16c9e6d2f43bbea8814a546b7409ce783d3",
-                      "4c4f53245d08da4bb23698868350aaad22e3ab8dd034f548a1c43cd246be9856",
-                      "2fafa0a1fa86d8e7a3b95ae78cc2b988ded6a5b59eb83ad58097252188b902b2",
-                      "1481e30e5e285f19735796706adff216ab862a9186875f9494150c4ae06fa4d1",
-                      "f0396c93f215fa4ef524e0ed04c3c21e39b1868e1ca8105e585ec17315e755e6",
-                      "cfc4dd6cb7fd8e1a1f55e49b4b5eb024221482105346f3c82b15fdaae36a3bb1",
-                      "2a494683b4a3c7f2ae41306252fed84785e2bbff3b022812d0882f06978df84a",
-                      "80d443972213342d04b9048fc3b1d5fcb1df0f822152eced6da4d3f6df27e70e",
-                      "4539717307a0208cd208d65093ccab5aa596a34d7511401987662d8cf62b1394">>).
-
-to_hex({ok, Bin}) ->
-  to_hex(Bin);
-to_hex(Int) when is_integer(Int) ->
-  to_hex(binary:encode_unsigned(Int));
-to_hex(Bin) when is_binary(Bin) ->
-  io_lib:format("~s\n", [[io_lib:format("~2.16.0b",[X]) || <<X:8>> <= Bin ]]).

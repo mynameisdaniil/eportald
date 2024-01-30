@@ -3,7 +3,7 @@
 -include_lib("rlp.hrl").
 
 %% API exports
--export([encode/1, decode/1, to_hex/1]).
+-export([encode/1, decode/1]).
 
 encode(Value) ->
   do_encode(Value).
@@ -135,9 +135,3 @@ do_encode(List)
 do_encode(WTF) ->
   io:format("RLP WTF: ~p~n", [WTF]),
   {error, <<"Can't encode this data">>}.
-
-%% Utils
-to_hex({ok, Bin}) ->
-  to_hex(Bin);
-to_hex(Bin) when is_binary(Bin) ->
-  io:format("~s\n", [[io_lib:format("~2.16.0B ",[X]) || <<X:8>> <= Bin ]]).
