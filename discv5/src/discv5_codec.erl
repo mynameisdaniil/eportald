@@ -1,6 +1,6 @@
 -module(discv5_codec).
 
--export([decode_packet/2, decode_protocol_message/3]).
+-export([decode_packet/2, decode_protocol_message/3, encode_protocol_message/3]).
 -export_type([parse_result/0]).
 
 -include("discv5.hrl").
@@ -203,10 +203,109 @@ decode_protocol_message(Key, Encrypted, Meta) ->
 do_decode_protocol_message(<<MsgType:8/big-unsigned-integer, EncodedMsg/binary>>) ->
   {ok, [RequestId | DecodedMsg]} = rlp:decode(EncodedMsg),
   case MsgType of
-    16#01 ->
+    ?PING_ID ->
       [EnrSeq] = DecodedMsg,
-      {ok, #ping{request_id = RequestId, enr_seq = EnrSeq}}
+      {ok, #ping{request_id = RequestId, enr_seq = EnrSeq}};
+    ?PONG_ID ->
+      [EnrSeq, RecipientIp, RecipientPort] = DecodedMsg,
+      {ok, #pong{request_id     = RequestId,
+                 enr_seq        = EnrSeq,
+                 recipient_ip   = RecipientIp,
+                 recipient_port = RecipientPort}};
+    ?FINDNODE_ID ->
+      Distances = DecodedMsg,
+      {ok, #findnode{request_id = RequestId, distances = Distances}};
+    ?NODES_ID ->
+      [Total, Enrs] = DecodedMsg,
+      {ok, #nodes{request_id = RequestId, total = Total, enrs = Enrs}};
+    ?TALKREQ_ID ->
+      [Protocol, Request] = DecodedMsg,
+      {ok, #talkreq{request_id = RequestId, protocol = Protocol, request = Request}};
+    ?TALKRESP_ID ->
+      [Response] = DecodedMsg,
+      {ok, #talkresp{request_id = RequestId, response = Response}};
+    ?REGTOPIC_ID ->
+      [Topic, ENR, Ticket] = DecodedMsg,
+      {ok, #regtopic{request_id = RequestId, topic = Topic, enr = ENR, ticket = Ticket}};
+    ?TICKET_ID ->
+      [Tocket, WaitTime] = DecodedMsg,
+      {ok, #ticket{request_id = RequestId, ticket = Tocket, wait_time = WaitTime}};
+    ?REGCONFIRMATION_ID ->
+      [Topic] = DecodedMsg,
+      {ok, #regconfirmation{request_id = RequestId, topic = Topic}};
+    ?TOPICQUERY_ID ->
+      [Topic] = DecodedMsg,
+      {ok, #topicquery{request_id = RequestId, topic = Topic}}
   end;
 
 do_decode_protocol_message(_) ->
   {error, "Unknown message type"}.
+
+encode_protocol_message(Key, Message, Meta) ->
+  {Selector, List} = do_encode_protocol_message(Message),
+  case rlp:encode(List) of
+    {ok, Encoded} ->
+      Payload = <<Selector/binary, Encoded/binary>>,
+      #meta{message_ad = MessageAd, nonce = Nonce} = Meta,
+      Result = crypto:crypto_one_time_aead(
+                 aes_128_gcm,
+                 Key,
+                 Nonce,
+                 Payload,
+                 MessageAd,
+                 ?TAG_LEN,
+                 true
+                ),
+      case Result of
+        error ->
+          {error, "Cannot encrypt message"};
+        {Encrypted, Tag} ->
+          {ok, <<Encrypted/binary, Tag/binary>>}
+      end;
+    {error, _} = E -> E
+  end.
+
+do_encode_protocol_message(#ping{request_id = RequestId, enr_seq = EnrSeq}) ->
+  {?PING_ID, [RequestId, EnrSeq]};
+
+do_encode_protocol_message(#pong{request_id     = RequestId,
+                                 enr_seq        = EnrSeq,
+                                 recipient_ip   = RecipientIp,
+                                 recipient_port = RecipientPort}) ->
+  {?PONG_ID, [RequestId, EnrSeq, RecipientIp, RecipientPort]};
+
+do_encode_protocol_message(#findnode{request_id = RequestId,
+                                     distances  = Distances}) ->
+  {?FINDNODE_ID, [RequestId, Distances]};
+
+do_encode_protocol_message(#nodes{request_id = RequestId,
+                                  total      = Total,
+                                  enrs       = Enrs}) ->
+  {?NODES_ID, [RequestId, Total, Enrs]};
+
+do_encode_protocol_message(#talkreq{request_id = RequestId,
+                                    protocol   = Protocol,
+                                    request    = Request}) ->
+  {?TALKREQ_ID, [RequestId, Protocol, Request]};
+
+do_encode_protocol_message(#talkresp{request_id = RequestId, response = Response}) ->
+  {?TALKRESP_ID, [RequestId, Response]};
+
+do_encode_protocol_message(#regtopic{request_id = RequestId,
+                                     topic      = Topic,
+                                     enr        = ENR,
+                                     ticket     = Ticket}) ->
+  {?REGTOPIC_ID, [RequestId, Topic, ENR, Ticket]};
+
+do_encode_protocol_message(#ticket{request_id = RequestId,
+                                   ticket     = Tocket,
+                                   wait_time  = WaitTime}) ->
+  {?TICKET_ID, [RequestId, Tocket, WaitTime]};
+
+do_encode_protocol_message(#regconfirmation{request_id = RequestId,
+                                            topic      = Topic}) ->
+  {?REGCONFIRMATION_ID, [RequestId, Topic]};
+
+do_encode_protocol_message(#topicquery{request_id = RequestId,
+                                       topic      = Topic}) ->
+  {?TOPICQUERY_ID, [RequestId, Topic]}.

@@ -9,6 +9,18 @@
 
 -define(TAG_LEN, 16).
 
+-define(PING_ID, 16#01).
+-define(PONG_ID, 16#02).
+-define(FINDNODE_ID, 16#03).
+-define(NODES_ID, 16#04).
+-define(TALKREQ_ID, 16#05).
+-define(TALKRESP_ID, 16#06).
+-define(REGTOPIC_ID, 16#07).
+-define(TICKET_ID, 16#08).
+-define(REGCONFIRMATION_ID, 16#09).
+-define(TOPICQUERY_ID, 16#0A).
+
+
 -type node_id() :: 0..?MAX_UNSIGNED_256_BIT.
 -type masking_iv() :: 0..?MAX_UNSIGNED_128_BIT.
 
@@ -63,48 +75,48 @@
          }).
 
 -record(findnode, {
-          request_id,
+          request_id :: non_neg_integer(),
           distances :: list(distance()),
           enr_seq
          }).
 
 -record(nodes, {
-          request_id,
+          request_id :: non_neg_integer(),
           total,
           enrs :: list(enr:enr())
          }).
 
 -record(talkreq, {
-          request_id,
+          request_id :: non_neg_integer(),
           protocol :: rlp:rlp(),
           request :: rlp:rlp()
          }).
 
 -record(talkresp, {
-          request_id,
+          request_id :: non_neg_integer(),
           response :: rlp:rlp()
          }).
 
 -record(regtopic, {
-          request_id,
+          request_id :: non_neg_integer(),
           topic :: binary(),
           enr :: enr:enr(),
           ticket :: rlp:rlp()
          }).
 
 -record(ticket, {
-          request_id,
+          request_id :: non_neg_integer(),
           ticket :: rlp:rlp(),
           wait_time :: integer()
          }).
 
 -record(regconfirmation, {
-          request_id,
+          request_id :: non_neg_integer(),
           topic :: binary()
          }).
 
 -record(topicquery, {
-          request_id,
+          request_id :: non_neg_integer(),
           topic :: binary()
          }).
 
