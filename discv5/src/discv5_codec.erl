@@ -1,6 +1,6 @@
 -module(discv5_codec).
 
--export([decode_packet/2, decode_protocol_message/3, encode_protocol_message/3]).
+-export([decode_packet/2, decode_protocol_message/3, encode_protocol_message/3, create_message_ad/3]).
 -export_type([parse_result/0]).
 
 -include("discv5.hrl").
@@ -245,7 +245,7 @@ encode_protocol_message(Key, Message, Meta) ->
   {Selector, List} = do_encode_protocol_message(Message),
   case rlp:encode(List) of
     {ok, Encoded} ->
-      Payload = <<Selector/binary, Encoded/binary>>,
+      Payload = <<Selector:1/big-unsigned-integer-unit:8, Encoded/binary>>,
       #meta{message_ad = MessageAd, nonce = Nonce} = Meta,
       Result = crypto:crypto_one_time_aead(
                  aes_128_gcm,
@@ -254,8 +254,7 @@ encode_protocol_message(Key, Message, Meta) ->
                  Payload,
                  MessageAd,
                  ?TAG_LEN,
-                 true
-                ),
+                 true),
       case Result of
         error ->
           {error, "Cannot encrypt message"};
@@ -309,3 +308,15 @@ do_encode_protocol_message(#regconfirmation{request_id = RequestId,
 do_encode_protocol_message(#topicquery{request_id = RequestId,
                                        topic      = Topic}) ->
   {?TOPICQUERY_ID, [RequestId, Topic]}.
+
+create_message_ad(MaskingIV, StaticHeader, AuthData) ->
+  #static_header{version = Version,
+                 flag = Flag,
+                 nonce = Nonce,
+                 authdata_size = AuthdataSize} = StaticHeader,
+  <<MaskingIV/binary,
+    Version:2/big-unsigned-integer-unit:8,
+    Flag:1/big-unsigned-integer-unit:8,
+    Nonce:12/binary,
+    AuthdataSize:2/big-unsigned-integer-unit:8,
+    AuthData/binary>>.
