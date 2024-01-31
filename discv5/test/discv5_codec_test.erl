@@ -100,7 +100,7 @@ decode_handshake_ping_with_enr_test() ->
   {ok, Ping} = discv5_codec:decode_protocol_message(?READ_KEY_C, Data, Meta),
   ?assertEqual(#ping{request_id = <<0, 0, 0, 1>>, enr_seq = 1}, Ping).
 
-encode_ping_test() ->
+encode_decode_ping_test() ->
   Ping = #ping{request_id = <<0, 0, 0, 1>>, enr_seq = 2},
   Nonce = binary:decode_hex(<<"ffffffffffffffffffffffff">>),
   MaskingIV = <<0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0>>,
@@ -110,8 +110,10 @@ encode_ping_test() ->
                                 nonce = Nonce,
                                 authdata_size = byte_size(AuthData)},
   Meta = #meta{nonce = Nonce, message_ad = discv5_codec:create_message_ad(MaskingIV, StaticHeader, AuthData)},
-  {ok, Encoded} = discv5_codec:encode_protocol_message(?NODE_B_PRIVKEY, Ping, Meta), % TODO probably need derivation key
-  ?assertEqual(?PING_MSG, Encoded).
+  Key = binary:decode_hex(<<"9f2d77db7004bf8a1a85107ac686990b">>),
+  {ok, Encoded} = discv5_codec:encode_protocol_message(Key, Ping, Meta),
+  {ok, Decoded} = discv5_codec:decode_protocol_message(Key, Encoded, Meta),
+  ?assertEqual(Ping, Decoded).
 
 encryption_test() ->
   Key = binary:decode_hex(<<"9f2d77db7004bf8a1a85107ac686990b">>),
