@@ -34,6 +34,9 @@
                             "4539717307a0208cd208d65093ccab5aa596a34d7511401987662d8cf62b1394"
                             "71">>)).
 
+% -define(NODE_A_PRIVKEY, binary:decode_hex(<<"eef77acb6c6a6eebc5b363a475ac583ec7eccdb42b6481424c60f59aa326547f">>)).
+% -define(NODE_B_PRIVKEY, binary:decode_hex(<<"66fb62bfbd66b9177a138c1e5cddbe4f7c30c343e94e68df8769459cb1cde628">>)).
+
 -define(SRC_NODE_ID, binary:decode_hex(<<"aaaa8419e9f49d0083561b48287df592939a8d19947d8c0ef88f2a4856a69fbb">>)).
 -define(DST_NODE_ID, binary:decode_hex(<<"bbbb9d047f0488c0b5a93c1c3f2d8bafc7c8ff337024a55434a0d0555de64db9">>)).
 
