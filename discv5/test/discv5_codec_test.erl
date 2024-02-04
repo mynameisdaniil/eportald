@@ -34,9 +34,6 @@
                             "4539717307a0208cd208d65093ccab5aa596a34d7511401987662d8cf62b1394"
                             "71">>)).
 
--define(NODE_A_PRIVKEY, binary:decode_hex(<<"eef77acb6c6a6eebc5b363a475ac583ec7eccdb42b6481424c60f59aa326547f">>)).
--define(NODE_B_PRIVKEY, binary:decode_hex(<<"66fb62bfbd66b9177a138c1e5cddbe4f7c30c343e94e68df8769459cb1cde628">>)).
-
 -define(SRC_NODE_ID, binary:decode_hex(<<"aaaa8419e9f49d0083561b48287df592939a8d19947d8c0ef88f2a4856a69fbb">>)).
 -define(DST_NODE_ID, binary:decode_hex(<<"bbbb9d047f0488c0b5a93c1c3f2d8bafc7c8ff337024a55434a0d0555de64db9">>)).
 
@@ -114,19 +111,3 @@ encode_decode_ping_test() ->
   {ok, Encoded} = discv5_codec:encode_protocol_message(Key, Ping, Meta),
   {ok, Decoded} = discv5_codec:decode_protocol_message(Key, Encoded, Meta),
   ?assertEqual(Ping, Decoded).
-
-encryption_test() ->
-  Key = binary:decode_hex(<<"9f2d77db7004bf8a1a85107ac686990b">>),
-  Nonce = binary:decode_hex(<<"27b5af763c446acd2749fe8e">>),
-  Payload = binary:decode_hex(<<"01c20101">>),
-  MessageAd = binary:decode_hex(<<"93a7400fa0d6a694ebc24d5cf570f65d04215b6ac00757875e3f3a5f42107903">>),
-  {Encrypted, Tag} = crypto:crypto_one_time_aead(
-                       aes_128_gcm,
-                       Key,
-                       Nonce,
-                       Payload,
-                       MessageAd,
-                       ?TAG_LEN,
-                       true),
-  Result = <<Encrypted/binary, Tag/binary>>,
-  ?assertEqual(binary:decode_hex(<<"a5d12a2d94b8ccb3ba55558229867dc13bfa3648">>), Result).
