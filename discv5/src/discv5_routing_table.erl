@@ -1,4 +1,4 @@
--module(discv5_udp_listener).
+-module(discv5_routing_table).
 
 -include_lib("kernel/include/logger.hrl").
 
@@ -7,15 +7,12 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {
-          socket :: gen_udp:socket()
+          table :: ets:table()
          }).
-
--define(MAX_SAFE_UDP_SIZE, 508).
--define(MIN_DISCV5_PACKET_SIZE, 63).
 
 %% API
 -export([
-         start_link/2
+         start_link/0
         ]).
 
 %% gen_server callbacks
@@ -30,17 +27,26 @@
 %%% API
 %%%===================================================================
 
-start_link(Port, IP) ->
-  gen_server:start_link({local, ?SERVER}, ?MODULE, {Port, IP}, []).
+start_link() ->
+  gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 
-init({Port, IP}) ->
-  ?LOG_INFO("Starting UDP listener on ~p~n", [Port]),
-  {ok, Socket} = gen_udp:open(Port, [binary, {ip, IP}, inet, {active, once}]),
-  {ok, #state{socket = Socket}}.
+init([]) ->
+  ?LOG_INFO("Starting routing table", []),
+  Table = ets:new(routing_table, [
+                                  named_table,
+                                  ordered_set,
+                                  protected,
+                                  {keypos, 2},
+                                  % TODO: collect statistics on read/write
+                                  % frequency and update if needed
+                                  {read_concurrency, false},
+                                  {write_concurrency, false}
+                                 ]),
+  {ok, #state{table = Table}}.
 
 handle_call(_Request, _From, State) ->
   Reply = {error, unexpected},
@@ -49,12 +55,8 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
   {noreply, State}.
 
-handle_info({udp, _Socket, IP, InPort, Packet}, #state{socket = Socket} = State) ->
-  ?LOG_DEBUG("Received: ~p~n", [Packet]),
-  {noreply, State};
-
 handle_info(Info, State) ->
-  ?LOG_ERROR("Unexpected handle_info: ~p~n", [Info]),
+  ?LOG_ERROR("Unexpected handle_info: ~p", [Info]),
   {noreply, State}.
 
 terminate(_Reason, _State) ->
@@ -66,3 +68,4 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+

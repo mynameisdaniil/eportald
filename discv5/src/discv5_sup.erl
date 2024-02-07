@@ -29,7 +29,22 @@ init([]) ->
     SupFlags = #{strategy => one_for_all,
                  intensity => 0,
                  period => 1},
-    ChildSpecs = [],
+    ChildSpecs = [
+                  #{id       => discv5_udp_listener
+                  , start    => {discv5_udp_listener, start_link, [5050, {127, 0, 0, 1}]}
+                  , restart  => transient
+                  , shutdown => infinity
+                  , type     => worker
+                  , modules  => [discv5_udp_listener]
+                   },
+                  #{id       => discv5_routing_table
+                  , start    => {discv5_routing_table, start_link, []}
+                  , restart  => transient
+                  , shutdown => infinity
+                  , type     => worker
+                  , modules  => [discv5_routing_table]
+                   }
+                 ],
     {ok, {SupFlags, ChildSpecs}}.
 
 %% internal functions

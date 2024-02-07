@@ -10,6 +10,7 @@
 -define(TEST_VECTOR_UDP, binary:decode_hex(<<"765f">>)).
 -define(TEST_VECTOR_SEQ, 1).
 -define(TEST_VECTOR_SECP256K1, binary:decode_hex(<<"03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138">>)).
+-define(TEST_VECTOR_NODE_ID, binary:decode_hex(<<"a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7">>)).
 
 encode_test() ->
   {ok, ENR} = enr:encode(1, [
@@ -23,6 +24,8 @@ decode_test() ->
 
   KV = ENR#enr_v4.kv,
 
+  io:format("KV: ~p~n", [KV]),
+  ?assertEqual(enr:compressed_pub_key_to_node_id(proplists:get_value(<<"secp256k1">>, KV)), ?TEST_VECTOR_NODE_ID),
   ?assertEqual(proplists:get_value(<<"ip">>, KV), ?TEST_VECTOR_IP),
   ?assertEqual(proplists:get_value(<<"udp">>, KV), ?TEST_VECTOR_UDP),
   ?assertEqual(proplists:get_value(<<"secp256k1">>, KV), ?TEST_VECTOR_SECP256K1),

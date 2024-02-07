@@ -1,6 +1,11 @@
 -module(discv5_codec).
 
--export([decode_packet/2, decode_protocol_message/3, encode_protocol_message/3, create_message_ad/3]).
+-export([
+         decode_packet/2,
+         decode_protocol_message/3,
+         encode_protocol_message/3,
+         create_message_ad/3
+        ]).
 -export_type([parse_result/0]).
 
 -include("discv5.hrl").

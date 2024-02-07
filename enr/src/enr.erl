@@ -3,7 +3,8 @@
 -export([
          encode/3,
          decode/1,
-         decode_rlp/1
+         decode_rlp/1,
+         compressed_pub_key_to_node_id/1
         ]).
 
 -include_lib("enr.hrl").
@@ -14,6 +15,10 @@
 -type priv_key() :: binary().
 -type kv() :: proplists:proplist().
 -type seq() :: non_neg_integer().
+
+compressed_pub_key_to_node_id(PubKey) ->
+  {ok, <<_:1/binary, X:32/binary, Y:32/binary>>} = libsecp256k1:ec_pubkey_decompress(PubKey),
+  keccak:keccak_256(<<X/binary, Y/binary>>).
 
 -spec encode(seq(), kv(), priv_key()) -> {ok, binary()} | {error, binary()}.
 encode(Seq, KV, PrivKey) ->
