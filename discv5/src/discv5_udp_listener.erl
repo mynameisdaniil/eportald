@@ -10,6 +10,8 @@
           socket :: gen_udp:socket()
          }).
 
+-type state() :: #state{}.
+
 -define(MAX_SAFE_UDP_SIZE, 508).
 -define(MIN_DISCV5_PACKET_SIZE, 63).
 
@@ -36,7 +38,7 @@ start_link(Port, IP) ->
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
-
+-spec init({inet:port_number(), inet:ip_address()}) -> state().
 init({Port, IP}) ->
   ?LOG_INFO("Starting UDP listener on ~p~n", [Port]),
   {ok, Socket} = gen_udp:open(Port, [binary, {ip, IP}, inet, {active, once}]),
@@ -49,7 +51,7 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
   {noreply, State}.
 
-handle_info({udp, _Socket, IP, InPort, Packet}, #state{socket = Socket} = State) ->
+handle_info({udp, _Socket, _IP, _InPort, Packet}, #state{socket = _} = State) ->
   ?LOG_DEBUG("Received: ~p~n", [Packet]),
   {noreply, State};
 

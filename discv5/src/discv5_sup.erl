@@ -43,6 +43,13 @@ init([]) ->
                   , shutdown => infinity
                   , type     => worker
                   , modules  => [discv5_routing_table]
+                   },
+                  #{id       => discv5_record_maintainer
+                  , start    => {discv5_record_maintainer, start_link, []}
+                  , restart  => transient
+                  , shutdown => infinity
+                  , type     => worker
+                  , modules  => [discv5_record_maintainer]
                    }
                  ],
     {ok, {SupFlags, ChildSpecs}}.

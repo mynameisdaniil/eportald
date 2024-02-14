@@ -1,13 +1,19 @@
--module(discv5_routing_table).
+-module(discv5_record_maintainer).
 
 -include_lib("kernel/include/logger.hrl").
+-include_lib("../enr/src/enr.hrl").
 
 -behaviour(gen_server).
 
 -define(SERVER, ?MODULE).
 
+-define(PRIVKEY_SIZE_BYTES, 32).
+-define(ENR_FILENAME, "enr").
+
 -record(state, {
-          table :: ets:table()
+          privkey :: binary(),
+          pubkey :: binary(),
+          seq :: non_neg_integer()
          }).
 
 -type state() :: #state{}.
@@ -35,20 +41,13 @@ start_link() ->
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
+
 -spec init([]) -> state().
 init([]) ->
-  ?LOG_INFO("Starting routing table", []),
-  Table = ets:new(routing_table, [
-                                  named_table,
-                                  ordered_set,
-                                  protected,
-                                  {keypos, 2},
-                                  % TODO: collect statistics on read/write
-                                  % frequency and update if needed
-                                  {read_concurrency, false},
-                                  {write_concurrency, false}
-                                 ]),
-  {ok, #state{table = Table}}.
+  PrivKey = crypto:strong_rand_bytes(?PRIVKEY_SIZE_BYTES),
+  {ok, PubKey} = libsecp256k1:ec_pubkey_create(PrivKey, uncompressed),
+  Seq = 0,
+  {ok, #state{seq = Seq, privkey = PrivKey, pubkey = PubKey}}.
 
 handle_call(_Request, _From, State) ->
   Reply = {error, unexpected},
@@ -70,4 +69,5 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
 
