@@ -1,7 +1,9 @@
+%% vim: ft=erlang
 {application, enr,
- [{description, "An OTP library"},
+ [{description, "An OTP application"},
   {vsn, "0.1.0"},
   {registered, []},
+  {mod, {enr_app, []}},
   {applications,
    [kernel,
     stdlib

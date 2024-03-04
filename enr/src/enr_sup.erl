@@ -1,9 +1,9 @@
 %%%-------------------------------------------------------------------
-%% @doc discv5 top level supervisor.
+%% @doc enr top level supervisor.
 %% @end
 %%%-------------------------------------------------------------------
 
--module(discv5_sup).
+-module(enr_sup).
 
 -behaviour(supervisor).
 
@@ -30,21 +30,15 @@ init([]) ->
                  intensity => 0,
                  period => 1},
     ChildSpecs = [
-                  #{id       => discv5_udp_listener
-                  , start    => {discv5_udp_listener, start_link, [5050, {127, 0, 0, 1}]}
+                  #{id       => enr_maintainer
+                  , start    => {enr_maintainer, start_link, []}
                   , restart  => transient
                   , shutdown => infinity
                   , type     => worker
-                  , modules  => [discv5_udp_listener]
-                   },
-                  #{id       => discv5_routing_table
-                  , start    => {discv5_routing_table, start_link, []}
-                  , restart  => transient
-                  , shutdown => infinity
-                  , type     => worker
-                  , modules  => [discv5_routing_table]
+                  , modules  => [enr_maintainer]
                    }
                  ],
     {ok, {SupFlags, ChildSpecs}}.
 
 %% internal functions
+
