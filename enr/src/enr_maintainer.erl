@@ -1,7 +1,6 @@
 -module(enr_maintainer).
 
 -include_lib("kernel/include/logger.hrl").
--include_lib("enr.hrl").
 
 -behaviour(gen_server).
 
