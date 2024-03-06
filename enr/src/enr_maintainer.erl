@@ -28,7 +28,8 @@
 -export([
          start_link/1,
          reset_state/0,
-         update_kv/2,
+         update/2,
+         get_value/1,
          get_enr/0
         ]).
 
@@ -50,8 +51,11 @@ start_link(Filename) ->
 reset_state() ->
   gen_server:call(?SERVER, reset_state).
 
-update_kv(K, V) ->
-  gen_server:call(?SERVER, {update_kv, K, V}).
+update(K, V) ->
+  gen_server:call(?SERVER, {update, K, V}).
+
+get_value(K) ->
+  gen_server:call(?SERVER, {get_value, K}).
 
 get_enr() ->
   gen_server:call(?SERVER, get_enr).
@@ -76,7 +80,7 @@ handle_call(reset_state, _From, State) ->
   EnrData = default_enr_data(),
   {reply, ok, State#state{enr_data = EnrData}};
 
-handle_call({update_kv, K, V},
+handle_call({update, K, V},
             _From,
             #state{enr_data = EnrData, filename = Filename} = State) ->
   #enr_data{kv = KV, seq = Seq} = EnrData,
@@ -85,10 +89,14 @@ handle_call({update_kv, K, V},
   save_enr_data(Filename, Enr1),
   {reply, ok, State#state{enr_data = Enr1}};
 
+handle_call({get_value, K},
+            _From,
+            #state{enr_data = #enr_data{kv = KV}} = State) ->
+  {reply, maps:get(K, KV, undefined), State};
 handle_call(get_enr,
             _From,
             #state{enr_data = #enr_data{seq = Seq, privkey = PrivKey, kv = KV}} = State) ->
-  Enr = enr:encode(Seq, KV, PrivKey),
+  Enr = enr_codec:encode(Seq, KV, PrivKey),
   {reply, Enr, State};
 
 handle_call(get_state, _From, State) ->

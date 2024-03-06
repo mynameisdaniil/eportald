@@ -10,7 +10,7 @@ default_state_test() ->
 
   %TEST
   {ok, Enr} = enr_maintainer:get_enr(),
-  {ok, DecodedEnr} = enr:decode(Enr),
+  {ok, DecodedEnr} = enr_codec:decode(Enr),
   #enr_v4{seq = Seq} = DecodedEnr,
 
   ?assertEqual(0, Seq),
@@ -27,15 +27,15 @@ enr_seq_increase_test() ->
 
   %TEST
   {ok, Enr} = enr_maintainer:get_enr(),
-  {ok, DecodedEnr} = enr:decode(Enr),
+  {ok, DecodedEnr} = enr_codec:decode(Enr),
   #enr_v4{seq = Seq} = DecodedEnr,
 
   ?assertEqual(0, Seq),
 
-  enr_maintainer:update_kv(<<"ip">>, <<"127.0.0.1">>),
+  enr_maintainer:update(<<"ip">>, <<"127.0.0.1">>),
 
   {ok, Enr1} = enr_maintainer:get_enr(),
-  {ok, DecodedEnr1} = enr:decode(Enr1),
+  {ok, DecodedEnr1} = enr_codec:decode(Enr1),
   #enr_v4{seq = Seq1} = DecodedEnr1,
 
   ?assertEqual(1, Seq1),
@@ -52,10 +52,10 @@ enr_reload_test() ->
   {ok, Pid} = enr_maintainer:start_link(Filename),
 
   %TEST
-  enr_maintainer:update_kv(<<"ip">>, <<"127.0.0.1">>),
+  enr_maintainer:update(<<"ip">>, <<"127.0.0.1">>),
 
   {ok, Enr} = enr_maintainer:get_enr(),
-  {ok, DecodedEnr} = enr:decode(Enr),
+  {ok, DecodedEnr} = enr_codec:decode(Enr),
   #enr_v4{seq = Seq} = DecodedEnr,
 
   ?assertEqual(1, Seq),
@@ -65,7 +65,7 @@ enr_reload_test() ->
   {ok, Pid1} = enr_maintainer:start_link(Filename),
 
   {ok, Enr1} = enr_maintainer:get_enr(),
-  {ok, DecodedEnr1} = enr:decode(Enr1),
+  {ok, DecodedEnr1} = enr_codec:decode(Enr1),
   #enr_v4{seq = Seq1, kv = KV} = DecodedEnr1,
   IP = maps:get(<<"ip">>, KV),
 
