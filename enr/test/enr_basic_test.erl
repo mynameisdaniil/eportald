@@ -13,10 +13,10 @@
 -define(TEST_VECTOR_NODE_ID, binary:decode_hex(<<"a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7">>)).
 
 encode_test() ->
-  {ok, ENR} = enr:encode(1, [
-                             {<<"ip">>, ?TEST_VECTOR_IP},
-                             {<<"udp">>, ?TEST_VECTOR_UDP}
-                            ], ?TEST_VECTOR_PRIV_KEY),
+  {ok, ENR} = enr:encode(1, #{
+                              <<"ip">> => ?TEST_VECTOR_IP,
+                              <<"udp">> => ?TEST_VECTOR_UDP
+                             }, ?TEST_VECTOR_PRIV_KEY),
   ?assertEqual(ENR, ?TEST_VECTOR_ENCODED_ENR).
 
 decode_test() ->
@@ -24,9 +24,8 @@ decode_test() ->
 
   KV = ENR#enr_v4.kv,
 
-  io:format("KV: ~p~n", [KV]),
-  ?assertEqual(enr:compressed_pub_key_to_node_id(proplists:get_value(<<"secp256k1">>, KV)), ?TEST_VECTOR_NODE_ID),
-  ?assertEqual(proplists:get_value(<<"ip">>, KV), ?TEST_VECTOR_IP),
-  ?assertEqual(proplists:get_value(<<"udp">>, KV), ?TEST_VECTOR_UDP),
-  ?assertEqual(proplists:get_value(<<"secp256k1">>, KV), ?TEST_VECTOR_SECP256K1),
+  ?assertEqual(enr:compressed_pub_key_to_node_id(maps:get(<<"secp256k1">>, KV)), ?TEST_VECTOR_NODE_ID),
+  ?assertEqual(maps:get(<<"ip">>, KV), ?TEST_VECTOR_IP),
+  ?assertEqual(maps:get(<<"udp">>, KV), ?TEST_VECTOR_UDP),
+  ?assertEqual(maps:get(<<"secp256k1">>, KV), ?TEST_VECTOR_SECP256K1),
   ?assertEqual(ENR#enr_v4.seq, ?TEST_VECTOR_SEQ).

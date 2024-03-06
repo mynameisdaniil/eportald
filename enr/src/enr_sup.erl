@@ -26,19 +26,20 @@ start_link() ->
 %%                  type => worker(),       % optional
 %%                  modules => modules()}   % optional
 init([]) ->
-    SupFlags = #{strategy => one_for_all,
-                 intensity => 0,
-                 period => 1},
-    ChildSpecs = [
-                  #{id       => enr_maintainer
-                  , start    => {enr_maintainer, start_link, []}
-                  , restart  => transient
-                  , shutdown => infinity
-                  , type     => worker
-                  , modules  => [enr_maintainer]
-                   }
-                 ],
-    {ok, {SupFlags, ChildSpecs}}.
+  Filename = application:get_env(enr, filename, "./priv/enr/data"),
+  SupFlags = #{strategy => one_for_all,
+               intensity => 0,
+               period => 1},
+  ChildSpecs = [
+                #{id       => enr_maintainer
+                , start    => {enr_maintainer, start_link, [Filename]}
+                , restart  => transient
+                , shutdown => infinity
+                , type     => worker
+                , modules  => [enr_maintainer]
+                 }
+               ],
+  {ok, {SupFlags, ChildSpecs}}.
 
 %% internal functions
 

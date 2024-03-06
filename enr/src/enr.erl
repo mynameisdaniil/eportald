@@ -21,12 +21,11 @@ compressed_pub_key_to_node_id(PubKey) ->
   keccak:keccak_256(<<X/binary, Y/binary>>).
 
 -spec encode(seq(), kv(), priv_key()) -> {ok, binary()} | {error, binary()}.
+% TODO do a PubKey version of this method
 encode(Seq, KV, PrivKey) ->
   {ok, PubKey} = libsecp256k1:ec_pubkey_create(PrivKey, compressed),
-  SortedKV = lists:sort(fun ({A, _}, {B, _}) -> A > B end,
-               lists:uniq([
-                  {<<"id">>, <<"v4">>},
-                  {<<"secp256k1">>, PubKey} | KV])),
+  Combined = maps:merge(KV, #{<<"id">> => <<"v4">>, <<"secp256k1">> => PubKey}),
+  SortedKV = lists:sort(fun ({A, _}, {B, _}) -> A > B end, maps:to_list(Combined)),
   FlatKV = lists:foldl(fun ({Key, Value}, Acc) -> [Key, Value | Acc] end, [], SortedKV),
   Content = [<<Seq>> | FlatKV],
   {ok, EncodedKV} = rlp:encode(Content),
@@ -79,20 +78,23 @@ decode(seq, [Seq | Rest], Struct) ->
   decode(id, Rest, Struct#enr_v4{seq = Seq});
 
 decode(id, [<<"id">>, ID | Rest], Struct) when ID == <<"v4">> ->
-  decode(pair, Rest, Struct#enr_v4{kv = [<<"id">>, ID]});
+  % decode(pair, Rest, Struct#enr_v4{kv = [{<<"id">>, ID} | []]});
+  decode(pair, Rest, Struct#enr_v4{kv = #{<<"id">> => ID}});
 
 decode(pair,
        [<<"secp256k1">> = Key, Value | Rest],
        #enr_v4{kv = KV, signature = Signature, content_hash = ContentHash} = Struct) ->
   case verify(ContentHash, Signature, Value) of
     true ->
-      decode(pair, Rest, Struct#enr_v4{kv = [{Key, Value}| KV]});
+      KV1 = maps:put(Key, Value, KV),
+      decode(pair, Rest, Struct#enr_v4{kv = KV1});
     false ->
       {error, <<"Signature verification failed">>}
   end;
 
 decode(pair, [Key, Value | Rest], #enr_v4{kv = KV} = Struct) ->
-  decode(pair, Rest, Struct#enr_v4{kv = [{Key, Value}| KV]});
+  KV1 = maps:put(Key, Value, KV),
+  decode(pair, Rest, Struct#enr_v4{kv = KV1});
 
 decode(pair, [], Struct) ->
   {ok, Struct};
