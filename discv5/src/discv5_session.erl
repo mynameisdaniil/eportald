@@ -76,6 +76,7 @@ generate_nonce({_NodeId, _IP, _Port} = SessionId) ->
 -spec init({session_id(), session_key()}) -> state().
 init({{NodeId, IP, Port} = SessionId, SessionKey}) ->
   ?LOG_INFO("Starting session handler for ~p/~p/~p", [NodeId, IP, Port]),
+  schedule_suicide(),
   {ok, #state{session_key = SessionKey, session_id = SessionId}}.
 
 handle_call(get_session, _From, #state{session_key = SessionKey} = State) ->
@@ -113,7 +114,7 @@ handle_info(suicide_time, #state{last_interaction = LastInteraction} = State) ->
   Now = erlang:system_time(millisecond),
   case Now - LastInteraction of
     Diff when Diff =< ?MAX_IDLE_TIME ->
-      erlang:send_after(?GC_INTERVAL, suicide_time),
+      schedule_suicide(),
       {noreply, State};
     _ ->
       % It's been too long, let's end this session
@@ -134,3 +135,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+schedule_suicide() ->
+  Interval = ?GC_INTERVAL + (rand:uniform(?GC_INTERVAL/2) - ?GC_INTERVAL/4),
+  erlang:send_after(Interval, suicide_time).
