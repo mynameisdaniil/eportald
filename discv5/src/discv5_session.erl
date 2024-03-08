@@ -4,11 +4,13 @@
 
 -behaviour(gen_server).
 
--define(SERVER, ?MODULE).
-
 -define(SUPERVISOR, discv5_session_sup).
 
 -define(MAX_32_BIT_INTEGER, 16#FFFFFFFF).
+
+-define(GC_INTERVAL, 60_000). % 1 minute in ms
+
+-define(MAX_IDLE_TIME, 300_000). % 5 minutes in ms
 
 -type node_id() :: binary().
 -type session_id() :: {node_id(), gen_udp:ip(), gen_udp:port()}.
@@ -17,7 +19,8 @@
 -record(state, {
           session_id :: session_id(),
           session_key :: session_key(),
-          msg_counter :: non_neg_integer()
+          msg_counter = 0 :: non_neg_integer(),
+          last_interaction :: non_neg_integer()
          }).
 
 -type state() :: #state{}.
@@ -62,7 +65,7 @@ inc_msg_counter({_NodeId, _IP, _Port} = SessionId) ->
   end.
 
 generate_nonce({_NodeId, _IP, _Port} = SessionId) ->
-  case gproc:whereis_name({n, l, nonce}) of
+  case gproc:whereis_name({n, l, SessionId}) of
     undefined -> {error, not_found};
     Pid -> gen_server:call(Pid, generate_nonce)
   end.
@@ -77,23 +80,27 @@ init({{NodeId, IP, Port} = SessionId, SessionKey}) ->
 
 handle_call(get_session, _From, #state{session_key = SessionKey} = State) ->
   Reply = {ok, SessionKey},
-  {reply, Reply, State};
+  LastInteraction = erlang:system_time(millisecond),
+  {reply, Reply, State#state{last_interaction = LastInteraction}};
 
 handle_call(inc_msg_counter, _From, #state{msg_counter = Counter} = State) ->
   case Counter + 1 of
     NewCounter when NewCounter < ?MAX_32_BIT_INTEGER ->
       Reply = {ok, NewCounter},
-      {reply, Reply, State#state{msg_counter = NewCounter}};
+      LastInteraction = erlang:system_time(millisecond),
+      {reply, Reply, State#state{msg_counter = NewCounter, last_interaction = LastInteraction}};
     _ ->
       Reply = {error, msg_counter_overflow},
-      {stop, normal, Reply, State}
+      LastInteraction = erlang:system_time(millisecond),
+      {stop, normal, Reply, State#state{last_interaction = LastInteraction}}
   end;
 
 handle_call(generate_nonce, _From, #state{msg_counter = MsgCounter} = State) ->
   Random = crypto:strong_rand_bytes(8), % 64 bits
   Nonce = <<MsgCounter:32/big-unsigned-integer-unit:1, Random/binary>>, % 96 bits total
   Reply = {ok, Nonce},
-  {reply, Reply, State};
+  LastInteraction = erlang:system_time(millisecond),
+  {reply, Reply, State#state{last_interaction = LastInteraction}};
 
 handle_call(_Request, _From, State) ->
   Reply = {error, unexpected},
@@ -101,6 +108,17 @@ handle_call(_Request, _From, State) ->
 
 handle_cast(_Msg, State) ->
   {noreply, State}.
+
+handle_info(suicide_time, #state{last_interaction = LastInteraction} = State) ->
+  Now = erlang:system_time(millisecond),
+  case Now - LastInteraction of
+    Diff when Diff =< ?MAX_IDLE_TIME ->
+      erlang:send_after(?GC_INTERVAL, suicide_time),
+      {noreply, State};
+    _ ->
+      % It's been too long, let's end this session
+      {stop, normal, State}
+  end;
 
 handle_info(Info, State) ->
   ?LOG_ERROR("Unexpected handle_info: ~p~n", [Info]),
