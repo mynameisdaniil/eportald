@@ -1,4 +1,4 @@
--module(discv5_routing_table).
+-module(discv5_routing).
 
 -include_lib("kernel/include/logger.hrl").
 
@@ -37,7 +37,7 @@ start_link() ->
 %%%===================================================================
 -spec init([]) -> state().
 init([]) ->
-  ?LOG_INFO("Starting routing table", []),
+  ?LOG_INFO("Starting routing table"),
   Table = ets:new(routing_table, [
                                   named_table,
                                   ordered_set,

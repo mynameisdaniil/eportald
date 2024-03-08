@@ -13,6 +13,8 @@
 
 -define(SERVER, ?MODULE).
 
+-define(TIMEOUT, 5000).
+
 start_link() ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
@@ -30,19 +32,26 @@ init([]) ->
                  intensity => 0,
                  period => 1},
     ChildSpecs = [
+                  #{id       => discv5_routing
+                  , start    => {discv5_routing, start_link, []}
+                  , restart  => transient
+                  , shutdown => ?TIMEOUT
+                  , type     => worker
+                  , modules  => [discv5_routing]
+                   },
+                  #{id       => discv5_session_sup
+                  , start    => {discv5_session_sup, start_link, []}
+                  , restart  => transient
+                  , shutdown => infinity
+                  , type     => supervisor
+                  , modules  => [discv5_session_sup]
+                   },
                   #{id       => discv5_udp_listener
                   , start    => {discv5_udp_listener, start_link, [5050, {127, 0, 0, 1}]}
                   , restart  => transient
-                  , shutdown => infinity
+                  , shutdown => ?TIMEOUT
                   , type     => worker
                   , modules  => [discv5_udp_listener]
-                   },
-                  #{id       => discv5_routing_table
-                  , start    => {discv5_routing_table, start_link, []}
-                  , restart  => transient
-                  , shutdown => infinity
-                  , type     => worker
-                  , modules  => [discv5_routing_table]
                    }
                  ],
     {ok, {SupFlags, ChildSpecs}}.
