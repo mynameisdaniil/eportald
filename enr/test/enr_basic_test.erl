@@ -20,25 +20,25 @@
 -define(REAL_TRIN_CLIENT, <<"t 0.1.1-alpha.1-110f50">>).
 
 encode_test() ->
-  {ok, ENR} = enr_codec:encode(1, #{
+  {ok, ENR} = enr:encode(1, #{
                               <<"ip">> => ?TEST_VECTOR_IP,
                               <<"udp">> => ?TEST_VECTOR_UDP
                              }, ?TEST_VECTOR_PRIV_KEY),
   ?assertEqual(ENR, ?TEST_VECTOR_ENCODED_ENR).
 
 decode_test() ->
-  {ok, ENR} = enr_codec:decode(?TEST_VECTOR_ENCODED_ENR),
+  {ok, ENR} = enr:decode(?TEST_VECTOR_ENCODED_ENR),
 
   KV = ENR#enr_v4.kv,
 
-  ?assertEqual(enr_codec:compressed_pub_key_to_node_id(maps:get(<<"secp256k1">>, KV)), ?TEST_VECTOR_NODE_ID),
+  ?assertEqual(enr:compressed_pub_key_to_node_id(maps:get(<<"secp256k1">>, KV)), ?TEST_VECTOR_NODE_ID),
   ?assertEqual(maps:get(<<"ip">>, KV), ?TEST_VECTOR_IP),
   ?assertEqual(maps:get(<<"udp">>, KV), ?TEST_VECTOR_UDP),
   ?assertEqual(maps:get(<<"secp256k1">>, KV), ?TEST_VECTOR_SECP256K1),
   ?assertEqual(ENR#enr_v4.seq, ?TEST_VECTOR_SEQ).
 
 decode_real_enr_test() ->
-  {ok, ENR} = enr_codec:decode(?REAL_TRIN_ENR),
+  {ok, ENR} = enr:decode(?REAL_TRIN_ENR),
   KV = ENR#enr_v4.kv,
   ?assertEqual(maps:get(<<"ip">>, KV), ?REAL_TRIN_IP),
   ?assertEqual(maps:get(<<"udp">>, KV), ?REAL_TRIN_UDP),
