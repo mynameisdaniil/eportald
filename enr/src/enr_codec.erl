@@ -75,11 +75,7 @@ decode(signature, [Signature | Rest], Struct) ->
 % TODO seq is 64 bit integer according to spec
 % but in fact it is not, it is variable in size from 1 to 4 bytes
 decode(seq, [Seq | Rest], Struct) ->
-  decode(id, Rest, Struct#enr_v4{seq = Seq});
-
-decode(id, [<<"id">>, ID | Rest], Struct) when ID == <<"v4">> ->
-  % decode(pair, Rest, Struct#enr_v4{kv = [{<<"id">>, ID} | []]});
-  decode(pair, Rest, Struct#enr_v4{kv = #{<<"id">> => ID}});
+  decode(pair, Rest, Struct#enr_v4{seq = Seq, kv = #{}});
 
 decode(pair,
        [<<"secp256k1">> = Key, Value | Rest],
@@ -93,7 +89,12 @@ decode(pair,
   end;
 
 decode(pair, [Key, Value | Rest], #enr_v4{kv = KV} = Struct) ->
-  KV1 = maps:put(Key, Value, KV),
+  KV1 = case Key of
+          Key when is_integer(Key) ->
+            maps:put(<<Key>>, Value, KV);
+          Key ->
+            maps:put(Key, Value, KV)
+        end,
   decode(pair, Rest, Struct#enr_v4{kv = KV1});
 
 decode(pair, [], Struct) ->
