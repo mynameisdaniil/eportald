@@ -8,7 +8,7 @@
         ]).
 -export_type([parse_result/0]).
 
--include("discv5.hrl").
+-include_lib("discv5.hrl").
 
 -type parse_result() ::
   {ok, term()}

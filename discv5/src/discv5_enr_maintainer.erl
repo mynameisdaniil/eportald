@@ -1,6 +1,7 @@
 -module(discv5_enr_maintainer).
 
 -include_lib("kernel/include/logger.hrl").
+-include_lib("discv5.hrl").
 
 -behaviour(gen_server).
 
@@ -11,6 +12,7 @@
 -record(enr_data, {
           privkey :: binary(),
           pubkey :: binary(),
+          node_id :: node_id(),
           seq :: non_neg_integer(),
           kv :: map()
          }).
@@ -131,8 +133,15 @@ save_enr_data(Filename, EnrData) ->
 default_enr_data() ->
   PrivKey = crypto:strong_rand_bytes(?PRIVKEY_SIZE_BYTES),
   {ok, PubKey} = libsecp256k1:ec_pubkey_create(PrivKey, uncompressed),
+  NodeId = enr:compressed_pub_key_to_node_id(PubKey),
   Seq = 0,
-  #enr_data{seq = Seq, privkey = PrivKey, pubkey = PubKey, kv = #{}}.
+  #enr_data{
+     seq = Seq,
+     privkey = PrivKey,
+     pubkey = PubKey,
+     node_id = NodeId,
+     kv = #{<<"c">> => <<"eportald">>}
+    }.
 
 load_enr_data(Filename) ->
   case file:read_file(Filename) of
