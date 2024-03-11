@@ -1,10 +1,10 @@
--module(discv5_session).
+-module(discv5_node).
 
 -include_lib("kernel/include/logger.hrl").
 
 -behaviour(gen_server).
 
--define(SUPERVISOR, discv5_session_sup).
+-define(SUPERVISOR, discv5_node_sup).
 
 -define(MAX_32_BIT_INTEGER, 16#FFFFFFFF).
 
@@ -27,11 +27,10 @@
 
 %% API
 -export([
-         start_link/2,
+         start_link/1,
          add_session/2,
-         get_session/1,
-         inc_msg_counter/1,
-         generate_nonce/1
+         add_node/1,
+         lookup/2
         ]).
 
 %% gen_server callbacks
@@ -46,38 +45,26 @@
 %%% API
 %%%===================================================================
 
-start_link({_NodeId, _IP, _Port} = SessionId, SessionKey) ->
-  gen_server:start_link({via, gproc, {n, l, SessionId}}, ?MODULE, {SessionId, SessionKey}, []).
+start_link(NodeId) ->
+  gen_server:start_link({via, gproc, {n, l, NodeId}}, ?MODULE, NodeId, []).
+  % gen_server:start_link({via, gproc, {n, l, SessionId}}, ?MODULE, {SessionId, SessionKey}, []).
 
 add_session({_NodeId, _IP, _Port} = SessionId, SessionKey) ->
   supervisor:start_child(?SUPERVISOR, [SessionId, SessionKey]).
 
-get_session({_NodeId, _IP, _Port} = SessionId) ->
-  case gproc:whereis_name({n, l, SessionId}) of
-    undefined -> {error, not_found};
-    Pid -> gen_server:call(Pid, get_session)
-  end.
+add_node(NodeId) ->
+  supervisor:start_child(?SUPERVISOR, [NodeId]).
 
-inc_msg_counter({_NodeId, _IP, _Port} = SessionId) ->
-  case gproc:whereis_name({n, l, SessionId}) of
-    undefined -> {error, not_found};
-    Pid -> gen_server:call(Pid, inc_msg_counter)
-  end.
-
-generate_nonce({_NodeId, _IP, _Port} = SessionId) ->
-  case gproc:whereis_name({n, l, SessionId}) of
-    undefined -> {error, not_found};
-    Pid -> gen_server:call(Pid, generate_nonce)
-  end.
+lookup(LogDistance, N) ->
+  ok.
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
--spec init({session_id(), session_key()}) -> state().
-init({{NodeId, IP, Port} = SessionId, SessionKey}) ->
-  ?LOG_INFO("Starting session handler for ~p/~p/~p", [NodeId, IP, Port]),
-  schedule_suicide(),
-  {ok, #state{session_key = SessionKey, session_id = SessionId}}.
+-spec init([]) -> state().
+init(NodeId) ->
+  ?LOG_INFO("Starting node: ~p", [NodeId]),
+  {ok, #state{}}.
 
 handle_call(get_session, _From, #state{session_key = SessionKey} = State) ->
   Reply = {ok, SessionKey},
@@ -110,23 +97,23 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
   {noreply, State}.
 
-handle_info(suicide_time, #state{last_interaction = LastInteraction} = State) ->
+handle_info(check_session, #state{last_interaction = LastInteraction, session_id = SessionId} = State) ->
   Now = erlang:system_time(millisecond),
   case Now - LastInteraction of
     Diff when Diff =< ?MAX_IDLE_TIME ->
-      schedule_suicide(),
+      check_session(),
       {noreply, State};
     _ ->
       % It's been too long, let's end this session
-      {stop, normal, State}
+      gproc:unregister({n, l, SessionId}),
+      {noreply, State#state{msg_counter = 0, session_id = undefined, session_key = undefined}}
   end;
 
 handle_info(Info, State) ->
-  ?LOG_ERROR("Unexpected handle_info: ~p~n", [Info]),
+  ?LOG_ERROR("Unexpected handle_info: ~p", [Info]),
   {noreply, State}.
 
-terminate(_Reason, #state{session_id = SessionId}) ->
-  syn:unregister_name(SessionId),
+terminate(_Reason, _State) ->
   ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -136,6 +123,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-schedule_suicide() ->
+check_session() ->
   Interval = ?GC_INTERVAL + (rand:uniform(?GC_INTERVAL/2) - ?GC_INTERVAL/4),
-  erlang:send_after(Interval, suicide_time).
+  erlang:send_after(Interval, check_session).

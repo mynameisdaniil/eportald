@@ -1,4 +1,4 @@
--module(enr_maintainer).
+-module(discv5_enr_maintainer).
 
 -include_lib("kernel/include/logger.hrl").
 
@@ -66,7 +66,7 @@ get_enr() ->
 
 -spec init([string()]) -> state().
 init([Filename]) ->
-  ?LOG_INFO("Starting enr maintainer"),
+  ?LOG_INFO("Starting local ENR maintainer"),
   case load_enr_data(Filename) of
     {ok, EnrData} ->
       {ok, #state{enr_data = EnrData, filename = Filename}};
@@ -96,7 +96,7 @@ handle_call({get_value, K},
 handle_call(get_enr,
             _From,
             #state{enr_data = #enr_data{seq = Seq, privkey = PrivKey, kv = KV}} = State) ->
-  Enr = enr_codec:encode(Seq, KV, PrivKey),
+  Enr = enr:encode(Seq, KV, PrivKey),
   {reply, Enr, State};
 
 handle_call(get_state, _From, State) ->

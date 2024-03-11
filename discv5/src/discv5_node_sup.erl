@@ -1,4 +1,4 @@
--module(discv5_session_sup).
+-module(discv5_node_sup).
 
 -behaviour(supervisor).
 
@@ -25,15 +25,16 @@ init([]) ->
                  intensity => 0,
                  period => 1},
     ChildSpecs = [
-                  #{id       => discv5_session
-                  , start    => {discv5_session, start_link, []}
+                  #{id       => discv5_node
+                  , start    => {discv5_node, start_link, []}
                   , restart  => transient
                   , shutdown => 5000
                   , type     => worker
-                  , modules  => [discv5_session]
+                  , modules  => [discv5_node]
                    }
                  ],
     {ok, {SupFlags, ChildSpecs}}.
 
 %% internal functions
+
 

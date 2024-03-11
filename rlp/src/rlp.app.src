@@ -1,3 +1,4 @@
+%% vim: ft=erlang
 {application, rlp,
  [{description, "An OTP library"},
   {vsn, "0.1.0"},

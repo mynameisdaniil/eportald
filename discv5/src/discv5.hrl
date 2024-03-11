@@ -1,5 +1,7 @@
 -ifndef(DISCV5).
 
+-define(APP, discv5).
+
 -define(ORDINARY_MSG_FLAG, 0).
 -define(WHOAREYOU_MSG_FLAG, 1).
 -define(HANDSHAKE_MSG_FLAG, 2).
@@ -19,6 +21,11 @@
 -define(TICKET_ID, 16#08).
 -define(REGCONFIRMATION_ID, 16#09).
 -define(TOPICQUERY_ID, 16#0A).
+
+-define(BOOTSTRAP_NODE, begin
+                          {ok, List} = application:get_env(?APP, bootstrap_nodes, [])
+                          lists:nth(rand:uniform(length(List)), List)
+                        end).
 
 
 -type node_id() :: 0..?MAX_UNSIGNED_256_BIT.

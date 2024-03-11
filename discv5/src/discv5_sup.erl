@@ -28,23 +28,24 @@ start_link() ->
 %%                  type => worker(),       % optional
 %%                  modules => modules()}   % optional
 init([]) ->
+    Filename = application:get_env(enr, filename, "./priv/enr/data"),
     SupFlags = #{strategy => one_for_all,
                  intensity => 0,
                  period => 1},
     ChildSpecs = [
-                  #{id       => discv5_routing
-                  , start    => {discv5_routing, start_link, []}
-                  , restart  => transient
-                  , shutdown => ?TIMEOUT
-                  , type     => worker
-                  , modules  => [discv5_routing]
-                   },
-                  #{id       => discv5_session_sup
-                  , start    => {discv5_session_sup, start_link, []}
+                  #{id       => discv5_node_sup
+                  , start    => {discv5_node_sup, start_link, []}
                   , restart  => transient
                   , shutdown => infinity
                   , type     => supervisor
-                  , modules  => [discv5_session_sup]
+                  , modules  => [discv5_node_sup]
+                   },
+                  #{id       => discv5_enr_maintainer
+                  , start    => {discv5_enr_maintainer, start_link, [Filename]}
+                  , restart  => transient
+                  , shutdown => ?TIMEOUT
+                  , type     => worker
+                  , modules  => [discv5_enr_maintainer]
                    },
                   #{id       => discv5_udp_listener
                   , start    => {discv5_udp_listener, start_link, [5050, {127, 0, 0, 1}]}
