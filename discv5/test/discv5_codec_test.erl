@@ -45,59 +45,67 @@
 -define(READ_KEY_C, binary:decode_hex(<<"53b1c075f41876423154e157470c2f48">>)).
 
 decode_ping_test() ->
-  {ok, #ordinary_message{src_id = SrcId,
-                         data   = Encoded,
-                         meta   = Meta}} = discv5_codec:decode_packet(?PING_MSG, ?DST_NODE_ID),
+  {ok, #ordinary_message{static_header = StaticHeader,
+                         authdata      = Authdata,
+                         data          = Encoded,
+                         message_ad    = MessageAd}} = discv5_codec:decode_packet(?PING_MSG, ?DST_NODE_ID),
+  #authdata{src_id = SrcId} = Authdata,
   ?assertEqual(?SRC_NODE_ID, SrcId),
-  Decoded = discv5_codec:decode_protocol_message(?READ_KEY_A, Encoded, Meta),
+  Decoded = discv5_codec:decode_protocol_message(?READ_KEY_A, Encoded, StaticHeader, MessageAd),
   ?assertEqual({ok, #ping{request_id = <<0, 0, 0, 1>>, enr_seq = 2}}, Decoded).
 
 decode_whoareyou_test() ->
   {ok, Decoded} = discv5_codec:decode_packet(?WHOAREYOU_MSG, ?DST_NODE_ID),
   IdNonce = binary:decode_hex(<<"0102030405060708090a0b0c0d0e0f10">>),
-  ?assertEqual(#whoareyou_message{id_nonce = IdNonce, enr_seq = 0}, Decoded).
+  ?assertEqual(#whoareyou_message{authdata = #authdata{enr_seq = 0, id_nonce = IdNonce}}, Decoded).
 
 decode_handshake_ping_test() ->
   {ok, Handshake} = discv5_codec:decode_packet(?HANDSHAKE_PING_MSG, ?DST_NODE_ID),
   #handshake_message{
-     data          = Data,
-     authdata_head = #authdata_head{
-                        src_id = SrcId
-                       },
-     % id_signature  = IdSignature,
-     eph_pubkey    = EphemeralPubkey,
-     record        = Record,
-     meta          = #meta{message_ad = MessageAd}
+     data       = Data,
+     authdata   = #authdata{
+                     authdata_head = #authdata_head{
+                                         src_id = SrcId
+                                        },
+                      % id_signature  = IdSignature,
+                      eph_pubkey    = EphemeralPubkey,
+                      record        = Record
+                     },
+     message_ad = MessageAd,
+     static_header = StaticHeader
     } = Handshake,
   ?assertEqual(?SRC_NODE_ID, SrcId),
   % ?assertEqual(<<>>, IdSignature),
   ?assertEqual(binary:decode_hex(<<"039a003ba6517b473fa0cd74aefe99dadfdb34627f90fec6362df85803908f53a5">>), EphemeralPubkey),
   ?assertEqual(nil, Record),
-  Nonce = binary:decode_hex(<<"ffffffffffffffffffffffff">>),
-  Meta = #meta{nonce = Nonce, message_ad = MessageAd},
-  {ok, Ping} = discv5_codec:decode_protocol_message(?READ_KEY_B, Data, Meta),
+  Nonce = binary:decode_hex(<<"ffffffffffffffffffffffff">>), %% TODO WTF?! is nonce or id_nonce
+  ?assertEqual(Nonce, StaticHeader#static_header.nonce),
+  {ok, Ping} = discv5_codec:decode_protocol_message(?READ_KEY_B, Data, StaticHeader, MessageAd),
   ?assertEqual(#ping{request_id = <<0, 0, 0, 1>>, enr_seq = 1}, Ping).
 
 decode_handshake_ping_with_enr_test() ->
   {ok, Handshake} = discv5_codec:decode_packet(?HANDSHAKE_PING_MSG_WITH_ENR, ?DST_NODE_ID),
   #handshake_message{
      data          = Data,
-     authdata_head = #authdata_head{
-                        src_id = SrcId
-                       },
-     % id_signature  = IdSignature,
-     eph_pubkey    = EphemeralPubkey,
-     record        = Record,
-     meta          = #meta{message_ad = MessageAd}
+     authdata      = #authdata{
+                        authdata_head = #authdata_head{
+                                           src_id = SrcId
+                                          },
+                        % id_signature  = IdSignature,
+                        eph_pubkey    = EphemeralPubkey,
+                        record        = Record
+                     },
+     message_ad    = MessageAd,
+     static_header = StaticHeader
     } = Handshake,
   io:format(">>> Record: ~p~n", [Record]),
   ?assertEqual(?SRC_NODE_ID, SrcId),
   ?assertMatch(#enr_v4{}, Record),
   % ?assertEqual(<<>>, IdSignature),
   ?assertEqual(binary:decode_hex(<<"039a003ba6517b473fa0cd74aefe99dadfdb34627f90fec6362df85803908f53a5">>), EphemeralPubkey),
-  Nonce = binary:decode_hex(<<"ffffffffffffffffffffffff">>),
-  Meta = #meta{nonce = Nonce, message_ad = MessageAd},
-  {ok, Ping} = discv5_codec:decode_protocol_message(?READ_KEY_C, Data, Meta),
+  % Nonce = binary:decode_hex(<<"ffffffffffffffffffffffff">>),
+  % Meta = #meta{nonce = Nonce, message_ad = MessageAd},
+  {ok, Ping} = discv5_codec:decode_protocol_message(?READ_KEY_C, Data, StaticHeader, MessageAd),
   ?assertEqual(#ping{request_id = <<0, 0, 0, 1>>, enr_seq = 1}, Ping).
 
 encode_decode_ping_test() ->
@@ -109,8 +117,9 @@ encode_decode_ping_test() ->
                                 flag = ?ORDINARY_MSG_FLAG,
                                 nonce = Nonce,
                                 authdata_size = byte_size(AuthData)},
-  Meta = #meta{nonce = Nonce, message_ad = discv5_codec:create_message_ad(MaskingIV, StaticHeader, AuthData)},
+  MessageAd = discv5_codec:create_message_ad(MaskingIV, StaticHeader, AuthData),
+  % Meta = #meta{nonce = Nonce, message_ad = discv5_codec:create_message_ad(MaskingIV, StaticHeader, AuthData)},
   Key = binary:decode_hex(<<"9f2d77db7004bf8a1a85107ac686990b">>),
-  {ok, Encoded} = discv5_codec:encode_protocol_message(Key, Ping, Meta),
-  {ok, Decoded} = discv5_codec:decode_protocol_message(Key, Encoded, Meta),
+  {ok, Encoded} = discv5_codec:encode_protocol_message(Key, Ping, StaticHeader, MessageAd),
+  {ok, Decoded} = discv5_codec:decode_protocol_message(Key, Encoded, StaticHeader, MessageAd),
   ?assertEqual(Ping, Decoded).

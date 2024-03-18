@@ -1,6 +1,7 @@
 -module(discv5_udp_listener).
 
 -include_lib("kernel/include/logger.hrl").
+-include_lib("discv5.hrl").
 
 -behaviour(gen_server).
 
@@ -53,6 +54,28 @@ handle_cast(_Msg, State) ->
 
 handle_info({udp, _Socket, _IP, _InPort, Packet}, #state{socket = _} = State) ->
   ?LOG_DEBUG("Received: ~p~n", [Packet]),
+  case discv5_codec:decode_packet(Packet) of
+    {ok, #ordinary_message{authdata = #authdata{src_id = SrcId}} = Msg} ->
+      ?LOG_DEBUG("Received ordinary message from 0x~s", [binary:encode_hex(SrcId, lowercase)]),
+      case gproc:where({n, l, SrcId}) of
+        undefined ->
+          ?LOG_WARNING("Cannot find process for NodeId: 0x~s",
+                       [binary:encode_hex(SrcId, lowercase)]);
+        Pid ->
+          Pid ! Msg
+      end;
+    {ok, #whoareyou_message{static_header = #static_header{nonce = Nonce}} = Msg} ->
+      ?LOG_DEBUG("Received whoareyou message"),
+      case gproc:where({n, l, {nonce, Nonce}}) of
+        undefined ->
+          ?LOG_WARNING("Cannot find process for Nonce: 0x~s",
+                       [binary:encode_hex(Nonce, lowercase)]);
+        Pid ->
+          Pid ! Msg
+      end;
+    {ok, #handshake_message{authdata = #authdata{authdata_head = #authdata_head{src_id = SrcId}}} = Msg} ->
+      ?LOG_DEBUG("Received handshake message from 0x~s", [binary:encode_hex(SrcId, lowercase)])
+  end,
   {noreply, State};
 
 handle_info(Info, State) ->

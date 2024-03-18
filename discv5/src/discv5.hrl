@@ -23,45 +23,74 @@
 -define(REGCONFIRMATION_ID, 16#09).
 -define(TOPICQUERY_ID, 16#0A).
 
--type node_id() :: 0..?MAX_UNSIGNED_256_BIT.
+-type node_id()    :: 0..?MAX_UNSIGNED_256_BIT.
 -type masking_iv() :: 0..?MAX_UNSIGNED_128_BIT.
 
+-type protocol_id()   :: binary().
+-type version()       :: binary().
+-type flag()          :: non_neg_integer().
+-type nonce()         :: binary().
+-type authdata_size() :: non_neg_integer().
+
+-type message_ad()    :: binary().
+
+-type pubkey()        :: binary().
+
+-type id_signature()  :: binary().
+
+-type id_nonce()      :: binary().
+
 -record(static_header, {
-          version,
-          flag,
-          nonce,
-          authdata_size
+          protocol_id = <<"discv5">> :: protocol_id(),
+          version                    :: version(),
+          flag                       :: flag(),
+          nonce                      :: nonce(),
+          authdata_size              :: authdata_size()
          }).
 
--record(meta, {
-          nonce :: binary(),
-          message_ad :: binary()
-         }).
-
--record(ordinary_message, {
-          src_id :: node_id(),
-          data :: binary(),
-          meta :: #meta{}
-         }).
-
--record(whoareyou_message, {
-          id_nonce :: binary(), % uint128
-          enr_seq :: non_neg_integer() % uint64
-         }).
-
--record(handshake_message, {
-          authdata_head,
-          id_signature,
-          eph_pubkey,
-          record,
-          data :: binary(),
-          meta :: #meta{}
-         }).
+-type static_header() :: #static_header{}.
 
 -record(authdata_head, {
           src_id,
           sig_size,
           eph_key_size
+         }).
+
+-type authdata_head() :: #authdata_head{}.
+
+-record(authdata, {
+          % ordinary message
+          src_id        :: node_id(),
+          % whoareyou
+          id_nonce      :: id_nonce(),
+          enr_seq       :: enr:enr_seq(),
+          % handshake
+          authdata_head :: authdata_head(),
+          id_signature  :: id_signature(),
+          eph_pubkey    :: pubkey(),
+          record        :: enr:enr_v4()
+         }).
+
+-type authdata() :: #authdata{}.
+
+-record(ordinary_message, {
+          data          :: binary(),
+          static_header :: static_header(),
+          authdata      :: authdata(),
+          message_ad    :: message_ad()
+         }).
+
+-record(whoareyou_message, {
+          static_header :: static_header(),
+          authdata      :: authdata(),
+          message_ad    :: message_ad()
+         }).
+
+-record(handshake_message, {
+          data          :: binary(),
+          static_header :: static_header(),
+          authdata      :: authdata(),
+          message_ad    :: message_ad()
          }).
 
 -record(ping, {
