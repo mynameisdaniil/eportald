@@ -95,7 +95,7 @@ do_decode(authdata, #state{bytes_to_decode = Input,
   case Input of
     <<AuthData:AuthdataSize/binary, Rest/binary>> ->
       DecodedAuthData = crypto:crypto_update(Crypto, AuthData),
-      MessageAd = create_message_ad(MaskingIV, StaticHeader, AuthData),
+      MessageAd = create_message_ad(MaskingIV, StaticHeader, DecodedAuthData),
       do_decode(finalize_crypto, State#state{
                                    bytes_to_decode = Rest,
                                    authdata        = DecodedAuthData,
@@ -329,7 +329,6 @@ do_encode_protocol_message(#topicquery{request_id = RequestId,
   {?TOPICQUERY_ID, [RequestId, Topic]}.
 
 create_message_ad(MaskingIV, StaticHeader, AuthData) ->
-  io:format(">>> ~p \n ~p \n ~p \n", [MaskingIV, StaticHeader, AuthData]),
   #static_header{protocol_id   = ProtocolId,
                  version       = Version,
                  flag          = Flag,

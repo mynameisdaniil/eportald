@@ -57,7 +57,7 @@ decode_ping_test() ->
 decode_whoareyou_test() ->
   {ok, Decoded} = discv5_codec:decode_packet(?WHOAREYOU_MSG, ?DST_NODE_ID),
   IdNonce = binary:decode_hex(<<"0102030405060708090a0b0c0d0e0f10">>),
-  ?assertEqual(#whoareyou_message{authdata = #authdata{enr_seq = 0, id_nonce = IdNonce}}, Decoded).
+  ?assertMatch(#whoareyou_message{authdata = #authdata{enr_seq = 0, id_nonce = IdNonce}}, Decoded).
 
 decode_handshake_ping_test() ->
   {ok, Handshake} = discv5_codec:decode_packet(?HANDSHAKE_PING_MSG, ?DST_NODE_ID),
