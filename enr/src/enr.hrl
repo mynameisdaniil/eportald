@@ -6,7 +6,7 @@
   signature    = <<>> :: nonempty_binary(),
   content_hash = <<>> :: nonempty_binary(),
   seq          = 0    :: enr_seq(),
-  kv           = []   :: list(tuple())
+  kv           = []   :: map()
 }).
 
 -type enr() :: binary().

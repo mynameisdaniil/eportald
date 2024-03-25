@@ -2,6 +2,8 @@
 
 -export([
          encode/3,
+         make_record/3,
+         % encode_record/3, TODO maybe implement this method
          decode/1,
          decode_rlp/1,
          compressed_pub_key_to_node_id/1
@@ -13,7 +15,7 @@
 -export_type([enr_v4/0]).
 
 -type priv_key() :: binary().
--type kv() :: proplists:proplist().
+-type kv() :: map().
 -type seq() :: non_neg_integer().
 
 compressed_pub_key_to_node_id(PubKey) ->
@@ -21,21 +23,46 @@ compressed_pub_key_to_node_id(PubKey) ->
   keccak:keccak_256(<<X/binary, Y/binary>>).
 
 -spec encode(seq(), kv(), priv_key()) -> {ok, binary()} | {error, binary()}.
-% TODO do a PubKey version of this method
 encode(Seq, KV, PrivKey) ->
   {ok, PubKey} = libsecp256k1:ec_pubkey_create(PrivKey, compressed),
+
   Combined = maps:merge(KV, #{<<"id">> => <<"v4">>, <<"secp256k1">> => PubKey}),
   SortedKV = lists:sort(fun ({A, _}, {B, _}) -> A > B end, maps:to_list(Combined)),
-  FlatKV = lists:foldl(fun ({Key, Value}, Acc) -> [Key, Value | Acc] end, [], SortedKV),
-  Content = [<<Seq>> | FlatKV],
+  FlatKV   = lists:foldl(fun ({Key, Value}, Acc) -> [Key, Value | Acc] end, [], SortedKV),
+  Content  = [<<Seq>> | FlatKV],
+
   {ok, EncodedKV} = rlp:encode(Content),
-  Digest = keccak:keccak_256(EncodedKV),
-  Signature = sign(Digest, PrivKey),
+
+  Digest      = keccak:keccak_256(EncodedKV),
+  Signature   = sign(Digest, PrivKey),
   FullContent = [Signature | Content],
+
   {ok, Raw} = rlp:encode(FullContent),
-  Encoded = base64:encode(Raw, #{mode => urlsafe, padding => false}),
-  Ret = <<<<"enr:">>/binary, Encoded/binary>>,
+  Encoded   = base64:encode(Raw, #{mode => urlsafe, padding => false}),
+  Ret       = <<<<"enr:">>/binary, Encoded/binary>>,
   {ok, Ret}.
+
+-spec make_record(seq(), kv(), priv_key()) -> {ok, enr_v4()} | {error, binary()}.
+make_record(Seq, KV, PrivKey) ->
+  {ok, PubKey} = libsecp256k1:ec_pubkey_create(PrivKey, compressed),
+
+  Combined = maps:merge(KV, #{<<"id">> => <<"v4">>, <<"secp256k1">> => PubKey}),
+  SortedKV = lists:sort(fun ({A, _}, {B, _}) -> A > B end, maps:to_list(Combined)),
+  FlatKV   = lists:foldl(fun ({Key, Value}, Acc) -> [Key, Value | Acc] end, [], SortedKV),
+  Content  = [<<Seq>> | FlatKV],
+
+  {ok, EncodedKV} = rlp:encode(Content),
+
+  Digest    = keccak:keccak_256(EncodedKV),
+  Signature = sign(Digest, PrivKey),
+
+  Record = #enr_v4{
+              signature    = Signature,
+              content_hash = Digest,
+              seq          = Seq,
+              kv           = KV
+             },
+  {ok, Record}.
 
 -spec decode(binary()) -> {ok, enr_v4()} | {error, binary()}.
 % TODO not applicable for RLP-encoded ENR
