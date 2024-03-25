@@ -1,4 +1,4 @@
-priv/data/*
+priv/enr
 .rebar3
 _build
 _checkouts

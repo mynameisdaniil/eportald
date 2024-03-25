@@ -54,6 +54,13 @@ init([]) ->
                   , type     => worker
                   , modules  => [discv5_udp_listener]
                    },
+                  #{id       => discv5_request_id
+                  , start    => {discv5_request_id, start_link, []}
+                  , restart  => transient
+                  , shutdown => ?TIMEOUT
+                  , type     => worker
+                  , modules  => [discv5_request_id]
+                   },
                   #{id       => discv5_bootstrap
                   , start    => {discv5_bootstrap, start_link, []}
                   , restart  => transient

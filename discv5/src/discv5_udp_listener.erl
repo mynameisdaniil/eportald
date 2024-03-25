@@ -18,7 +18,8 @@
 
 %% API
 -export([
-         start_link/2
+         start_link/2,
+         send_message/3
         ]).
 
 %% gen_server callbacks
@@ -36,6 +37,9 @@
 start_link(Port, IP) ->
   gen_server:start_link({local, ?SERVER}, ?MODULE, {Port, IP}, []).
 
+send_message(Ip, Port, Packet) ->
+  gen_server:call(?SERVER, {send_message, Ip, Port, Packet}).
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -44,6 +48,10 @@ init({Port, IP}) ->
   ?LOG_INFO("Starting UDP listener on ~p~n", [Port]),
   {ok, Socket} = gen_udp:open(Port, [binary, {ip, IP}, inet, {active, once}]),
   {ok, #state{socket = Socket}}.
+
+handle_call({send_message, Ip, Port, Packet}, _From, #state{socket = Socket} = State) ->
+  ok = gen_udp:send(Socket, Ip, Port, Packet),
+  {reply, ok, State};
 
 handle_call(_Request, _From, State) ->
   Reply = {error, unexpected},

@@ -2,11 +2,13 @@
 
 -export([
          decode_packet/2,
+         encode_packet/1,
          decode_protocol_message/4,
          encode_protocol_message/4,
          create_message_ad/3,
          nonce/0,
-         nonce/1
+         nonce/1,
+         masking_iv/0
         ]).
 -export_type([parse_result/0]).
 
@@ -198,7 +200,6 @@ do_decode(Stage, #state{bytes_to_decode = BytesToDecode} = State) ->
   io:format(">>>WTF\n Stage: ~p\n State: ~p\n BytesToDecode: ~p\n", [Stage, State, BytesToDecode]),
   {error, unexpected}.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 decode_protocol_message(Key, Encrypted, StaticHeader, MessageAd) ->
   #static_header{nonce = Nonce} = StaticHeader,
   DataLen = byte_size(Encrypted),
@@ -259,6 +260,60 @@ do_decode_protocol_message(<<MsgType:8/big-unsigned-integer, EncodedMsg/binary>>
 
 do_decode_protocol_message(_) ->
   {error, "Unknown message type"}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+encode_packet(#ordinary_message{} = Message) ->
+  #ordinary_message{data          = Data,
+                    static_header = StaticHeader,
+                    authdata      = AuthData} = Message,
+  MaskingIV = masking_iv(),
+  Flag = ?ORDINARY_MSG_FLAG,
+  EncodedAuthData = encode_authdata(Flag, AuthData),
+  AuthdataSize = byte_size(EncodedAuthData),
+  Nonce = nonce(),
+  ProtocolId = <<"discv5">>,
+  Version = <<0, 0, 0, 1>>,
+  StaticHeader = #static_header{
+     protocol_id = ProtocolId,
+     version     = Version,
+     flag        = Flag,
+     nonce       = Nonce
+    },
+  <<MaskingIV:16/binary,
+    ProtocolId:6/binary,
+    Version:2/big-unsigned-integer-unit:8,
+    Flag:1/big-unsigned-integer-unit:8,
+    Nonce:12/binary,
+    AuthdataSize:2/big-unsigned-integer-unit:8,
+    EncodedAuthData/binary,
+    Data/binary>>;
+
+encode_packet(#whoareyou_message{} = Message) ->
+  <<>>;
+
+encode_packet(#handshake_message{} = Message) ->
+  <<>>.
+
+encode_authdata(?ORDINARY_MSG_FLAG, #authdata{src_id = SrcId}) ->
+  <<SrcId/binary>>;
+
+encode_authdata(?WHOAREYOU_MSG_FLAG, #authdata{id_nonce = IdNonce, enr_seq = EnrSeq}) ->
+  <<IdNonce:16/binary, EnrSeq:8/big-unsigned-integer-unit:8>>;
+
+encode_authdata(?HANDSHAKE_MSG_FLAG, #authdata{authdata_head = AuthdataHead,
+                                               id_signature  = IdSignature,
+                                               eph_pubkey    = EphPubkey,
+                                               record        = Record}) ->
+  #authdata_head{src_id = SrcId, sig_size = SigSize, eph_key_size = EphKeySize} = AuthdataHead,
+  {ok, EncodedRecord} = enr:encode_rlp(Record),
+  <<SrcId:32/binary,
+    SigSize:1/big-unsigned-integer-unit:8,
+    EphKeySize:1/big-unsigned-integer-unit:8,
+    IdSignature:SigSize/binary,
+    EphPubkey:EphKeySize/binary,
+    EncodedRecord/binary
+  >>.
 
 encode_protocol_message(Key, Message, StaticHeader, MessageAd) ->
   #static_header{nonce = Nonce} = StaticHeader,
@@ -348,3 +403,6 @@ nonce() ->
 nonce(Counter) ->
   Random = crypto:strong_rand_bytes(8),
   <<Counter:4/big-unsigned-integer-unit:8, Random/binary>>.
+
+masking_iv() ->
+  crypto:strong_rand_bytes(16).

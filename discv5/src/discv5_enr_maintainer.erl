@@ -2,12 +2,11 @@
 
 -include_lib("kernel/include/logger.hrl").
 -include_lib("discv5.hrl").
+-include_lib("../enr/src/enr.hrl").
 
 -behaviour(gen_server).
 
 -define(SERVER, ?MODULE).
-
--define(PRIVKEY_SIZE_BYTES, 32).
 
 -record(enr_data, {
           privkey :: binary(),
@@ -32,7 +31,11 @@
          reset_state/0,
          update/2,
          get_value/1,
-         get_enr/0
+         get_enr/0,
+         get_record/0,
+         get_node_id/0,
+         get_private_key/0,
+         get_enr_seq/0
         ]).
 
 %% gen_server callbacks
@@ -61,6 +64,18 @@ get_value(K) ->
 
 get_enr() ->
   gen_server:call(?SERVER, get_enr).
+
+get_record() ->
+  gen_server:call(?SERVER, get_record).
+
+get_node_id() ->
+  gen_server:call(?SERVER, get_node_id).
+
+get_private_key() ->
+  gen_server:call(?SERVER, get_private_key).
+
+get_enr_seq() ->
+  gen_server:call(?SERVER, get_enr_seq).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -94,15 +109,36 @@ handle_call({update, K, V},
 handle_call({get_value, K},
             _From,
             #state{enr_data = #enr_data{kv = KV}} = State) ->
-  {reply, maps:get(K, KV, undefined), State};
+  case maps:get(K, KV, undefined) of
+    undefined ->
+      {reply, {error, not_found}, State};
+    V ->
+      {reply, {ok, V}, State}
+  end;
+
 handle_call(get_enr,
             _From,
             #state{enr_data = #enr_data{seq = Seq, privkey = PrivKey, kv = KV}} = State) ->
-  Enr = enr:encode(Seq, KV, PrivKey),
-  {reply, Enr, State};
+  Ret = enr:encode(Seq, KV, PrivKey),
+  {reply, Ret, State};
+
+handle_call(get_record,
+            _From,
+            #state{enr_data = #enr_data{seq = Seq, privkey = PrivKey, kv = KV}} = State) ->
+  Ret = enr:make_record(Seq, KV, PrivKey),
+  {reply, Ret, State};
 
 handle_call(get_state, _From, State) ->
-  {reply, State, State};
+  {reply, {ok, State}, State};
+
+handle_call(get_node_id, _From, #state{enr_data = #enr_data{node_id = NodeId}} = State) ->
+  {reply, {ok, NodeId}, State};
+
+handle_call(get_private_key, _From, #state{enr_data = #enr_data{privkey = PrivKey}} = State) ->
+  {reply, {ok, PrivKey}, State};
+
+handle_call(get_enr_seq, _From, #state{enr_data = #enr_data{seq = EnrSeq}} = State) ->
+  {reply, {ok, EnrSeq}, State};
 
 handle_call(_Request, _From, State) ->
   Reply = {error, unexpected},
@@ -132,7 +168,7 @@ save_enr_data(Filename, EnrData) ->
 
 default_enr_data() ->
   PrivKey = crypto:strong_rand_bytes(?PRIVKEY_SIZE_BYTES),
-  {ok, PubKey} = libsecp256k1:ec_pubkey_create(PrivKey, uncompressed),
+  {ok, PubKey} = libsecp256k1:ec_pubkey_create(PrivKey, compressed),
   NodeId = enr:compressed_pub_key_to_node_id(PubKey),
   Seq = 0,
   #enr_data{

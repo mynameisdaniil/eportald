@@ -12,6 +12,11 @@
 
 -define(TAG_LEN, 16).
 
+-define(PRIVKEY_SIZE_BYTES, 32).
+
+-define(KDF_INFO_TEXT, <<"discovery v5 key agreement">>).
+-define(ID_SIGNATURE_TEXT, <<"discovery v5 identity proof">>).
+
 -define(PING_ID, 16#01).
 -define(PONG_ID, 16#02).
 -define(FINDNODE_ID, 16#03).
@@ -45,6 +50,7 @@
           version                    :: version(),
           flag                       :: flag(),
           nonce                      :: nonce(),
+          % this field is populated only during decoding
           authdata_size              :: authdata_size()
          }).
 

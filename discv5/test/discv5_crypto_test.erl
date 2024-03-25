@@ -42,7 +42,7 @@ key_derivation_test() ->
   {ok, Secret} = libsecp256k1:ec_pubkey_tweak_mul(?DEST_PUBKEY, ?EPHEMERAL_KEY),
   NodeIdA = ?NODE_ID_A,
   NodeIdB = ?NODE_ID_B,
-  KDFInfo = <<"discovery v5 key agreement", NodeIdA/binary, NodeIdB/binary>>,
+  KDFInfo = <<?KDF_INFO_TEXT/binary, NodeIdA/binary, NodeIdB/binary>>,
   % KeyData = hkdf:derive_secrets(sha256, Secret, KDFInfo, ?CHALLENGE_DATA, 32),
   PRK = hkdf:extract(sha256, ?CHALLENGE_DATA, Secret),
   KeyData = hkdf:expand(sha256, PRK, KDFInfo, 32),
@@ -60,7 +60,7 @@ id_nonce_signing_test() ->
   ChallengeData = ?SIGNING_CHALLENGE_DATA,
   EphemeralPubkey = ?SIGNING_EPHEMERAL_PUBKEY,
   NodeIdB = ?SIGNING_NODE_ID_B,
-  IdSignatureInput = <<"discovery v5 identity proof", ChallengeData/binary, EphemeralPubkey/binary, NodeIdB/binary>>,
+  IdSignatureInput = <<?ID_SIGNATURE_TEXT/binary, ChallengeData/binary, EphemeralPubkey/binary, NodeIdB/binary>>,
   Sha256 = crypto:hash(sha256, IdSignatureInput),
   {ok, Signature, _RecoveryId} = libsecp256k1:ecdsa_sign_compact(Sha256, ?SIGNING_STATIC_KEY, default, <<>>), % TODO this should be possible with crypto:sign/4
   ?assertEqual(?ID_SIGNATURE, Signature).

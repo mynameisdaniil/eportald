@@ -1,22 +1,19 @@
 {"1.2.0",
-[{<<"ex_rlp">>,{pkg,<<"ex_rlp">>,<<"0.6.0">>},1},
- {<<"fs">>,{pkg,<<"fs">>,<<"6.1.1">>},1},
+[{<<"fs">>,{pkg,<<"fs">>,<<"6.1.1">>},1},
  {<<"gproc">>,{pkg,<<"gproc">>,<<"1.0.0">>},0},
  {<<"hkdf">>,
   {git,"https://github.com/schnef/hkdf.git",
        {ref,"07bd1b38894bd5b97e6008ed1726044148c70142"}},
   0},
- {<<"libsecp256k1">>,{pkg,<<"libsecp256k1_nash_fork">>,<<"0.1.15">>},1},
+ {<<"libsecp256k1">>,{pkg,<<"libsecp256k1_nash_fork">>,<<"0.1.15">>},0},
  {<<"sync">>,{pkg,<<"sync">>,<<"0.4.1">>},0}]}.
 [
 {pkg_hash,[
- {<<"ex_rlp">>, <<"985391D2356A7CB8712A4A9A2DEB93F19F2FBCA0323F5C1203FCAF64D077E31E">>},
  {<<"fs">>, <<"9D147B944D60CFA48A349F12D06C8EE71128F610C90870BDF9A6773206452ED0">>},
  {<<"gproc">>, <<"AA9EC57F6C9FF065B16D96924168D7C7157CD1FD457680EFE4B1274F456FA500">>},
  {<<"libsecp256k1">>, <<"F6D7A3D29E3AA98B4AF809511EB1A09FB75DCF4A88C09EACD1C7451177FD8C2C">>},
  {<<"sync">>, <<"537C9A217015D95632C2F4D14D07FFE3ACAE4E8981CDFC1EF59F328EC004C6A2">>}]},
 {pkg_hash_ext,[
- {<<"ex_rlp">>, <<"7135DB93B861D9E76821039B60B00A6A22D2C4E751BF8C444BFFE7A042F1ABAF">>},
  {<<"fs">>, <<"EF94E95FFE79916860649FED80AC62B04C322B0BB70F5128144C026B4D171F8B">>},
  {<<"gproc">>, <<"109F253C2787DE8A371A51179D4973230CBEC6239EE673FA12216A5CE7E4F902">>},
  {<<"libsecp256k1">>, <<"2CC775864672D164D9ABC410696F8E39576FA392C0CA48611E0F69EB9A9D7396">>},
