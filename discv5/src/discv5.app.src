@@ -6,11 +6,14 @@
   {mod, {discv5_app, []}},
   {applications,
    [kernel,
-    stdlib
-   ]},
+    stdlib,
+    gproc
+   ]
+  },
   {env,[]},
   {modules, []},
 
   {licenses, ["Apache-2.0"]},
   {links, []}
  ]}.
+

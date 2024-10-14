@@ -63,7 +63,7 @@ handle_call(new_empty_request, _From, State) ->
   {reply, {ok, RequestId}, State};
 
 handle_call({new_request, Data} = Request, From, #state{table = Table} = State) ->
-  RequestId = erlang:monotonic_time(nanosecond),
+  RequestId = erlang:unique_integer([positive, monotonic]),
   case ets:insert_new(Table, {RequestId, Data}) of
     true ->
       {reply, {ok, RequestId}, State};

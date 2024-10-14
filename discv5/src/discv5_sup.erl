@@ -61,6 +61,13 @@ init([]) ->
                   , type     => worker
                   , modules  => [discv5_request_id]
                    },
+                  #{id       => discv5_session_keys
+                  , start    => {discv5_session_keys, start_link, []}
+                  , restart  => transient
+                  , shutdown => ?TIMEOUT
+                  , type     => worker
+                  , modules  => [discv5_session_keys]
+                   },
                   #{id       => discv5_bootstrap
                   , start    => {discv5_bootstrap, start_link, []}
                   , restart  => transient

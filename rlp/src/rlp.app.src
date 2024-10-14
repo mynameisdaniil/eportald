@@ -1,6 +1,6 @@
 %% vim: ft=erlang
 {application, rlp,
- [{description, "An OTP library"},
+ [{description, "Erlang native implementation of RLP codec"},
   {vsn, "0.1.0"},
   {registered, []},
   {applications,

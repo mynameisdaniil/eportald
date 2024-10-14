@@ -48,17 +48,18 @@ start_link(ENR) ->
   {ok, #enr_v4{kv = KV}} = enr:decode(ENR),
   PubKey = maps:get(<<"secp256k1">>, KV),
   NodeId = enr:compressed_pub_key_to_node_id(PubKey),
-  gen_statem:start_link({via, gproc, {n, l, NodeId}}, ?MODULE, {NodeId, ENR}, []).
+  Result = gen_statem:start_link({via, gproc, {n, l, NodeId}}, ?MODULE, {NodeId, ENR}, []),
+  Result.
 
 %%%===================================================================
 %%% gen_statem callbacks
 %%%===================================================================
 -spec callback_mode() -> gen_statem:callback_mode().
 callback_mode() ->
-  state_functiuons.
+  [state_functions, state_enter].
 
 init({NodeId, EnrStr}) ->
-  ?LOG_INFO("Starting discv5 node with NodeId: 0x~p", [binary:encode_hex(NodeId, lowercase)]),
+  ?LOG_INFO("Starting discv5 node with NodeId: 0x~s", [binary:encode_hex(NodeId, lowercase)]),
   case enr:decode(EnrStr) of
     {ok, Enr} ->
       {ok, initial_state, #data{node_id = NodeId, enr = Enr, loaded_from_disk = false}};
@@ -69,39 +70,55 @@ init({NodeId, EnrStr}) ->
 terminate(_Reason, _State, _Data) ->
   ok.
 
-initial_state(enter, _OldState, #data{loaded_from_disk = false} = Data) ->
+initial_state(enter, OldState, _Data) ->
+  ?LOG_INFO(">>>initial_state enter from: ~p", [OldState]),
+  self() ! begin_handshake,
+  keep_state_and_data;
+
+initial_state(info, begin_handshake, Data) ->
   {next_state, begin_handshake, Data}.
 
-begin_handshake(enter, _OldState, #data{node_id = NodeId, enr = #enr_v4{kv = EnrKV}} = Data) ->
+begin_handshake(enter, OldState, _Data) ->
+  ?LOG_INFO(">>>begin_handshake enter from: ~p", [OldState]),
+  self() ! do_handshake,
+  keep_state_and_data;
+
+begin_handshake(info, do_handshake, #data{node_id = NodeId, enr = #enr_v4{kv = EnrKV}} = Data) ->
   ?LOG_INFO("1. Starting handshake with NodeId: 0x~p", [binary:encode_hex(NodeId, lowercase)]),
-  %TODO send FINDNODE
   Nonce = discv5_codec:nonce(),
   {ok, Authdata} = discv5_enr_maintainer:get_node_id(),
-  StaticHeader = #static_header{version       = <<0, 0, 0, 1>>,
+  StaticHeader = #static_header{version       = 1,
                                 flag          = ?ORDINARY_MSG_FLAG,
                                 nonce         = Nonce,
                                 authdata_size = byte_size(Authdata)},
   MaskingIV = discv5_codec:masking_iv(),
   MessageAd = discv5_codec:create_message_ad(MaskingIV, StaticHeader, Authdata),
-  RequestId = discv5_request_id:new_request(self()), % TODO we MUST remove this pid() later after receiving reply to this message or on timeout
+  {ok, RequestId} = discv5_request_id:new_request(self()), % TODO we MUST remove this pid() later after receiving reply to this message or on timeout
   Msg = #findnode{request_id = RequestId, distances = [0]},
-  {ok, PrivKey} = discv5_enr_maintainer:get_private_key(),
-  {ok, Encoded} = discv5_codec:encode_protocol_message(PrivKey, Msg, StaticHeader, MessageAd),
+  {ok, SessionKey} = discv5_session_keys:get_session_keys_for(NodeId),
+  ?LOG_INFO(">>> ~p/~p/~p/~p", [SessionKey, Msg, StaticHeader, MessageAd]),
+  {ok, Encoded} = discv5_codec:encode_protocol_message(SessionKey, Msg, StaticHeader, MessageAd),
   Message = #ordinary_message{data = Encoded,
                               static_header = StaticHeader,
                               authdata = Authdata,
                               message_ad = MessageAd},
   Packet = discv5_codec:encode_packet(Message),
   #{<<"ip">> := Ip, <<"port">> := Port} = EnrKV,
+  ?LOG_INFO(">>>Port ~p", [Port]),
   discv5_udp_listener:send_message(Ip, Port, Packet),
   gproc:reg({n, l, {nonce, Nonce}}, self()),
   {next_state, await_whoareyou, Data#data{nonce = Nonce},
    [{state_timeout, ?WHOAREYOU_TIMEOUT, initial_state}]}.
 
+await_whoareyou(enter, OldState, _Data) ->
+  ?LOG_INFO(">>> await_whoareyou enter from: ~p", [OldState]),
+  keep_state_and_data;
+
 await_whoareyou(state_timeout, initial_state, #data{nonce = Nonce, node_id = NodeId} = Data) ->
   ?LOG_ERROR("Timeout waiting for WHOAREYOU from NodeId: 0x~p",
              [binary:encode_hex(NodeId, lowercase)]),
   gproc:unreg({n, l, {nonce, Nonce}}),
+  % ok = discv5_request_id:delete_request(RequestId), % TODO Somehow get RequestId into this place
   {next_state, cooldown_before_retry, Data#data{nonce = undefined},
    [state_timeout, ?COOLDOWN_TIMEOUT, cooldown]};
 
@@ -117,6 +134,7 @@ await_whoareyou(info,
                   },
      message_ad = ChallengeData
     } = Msg,
+  % ok = discv5_request_id:delete_request(RequestId), % TODO Somehow get RequestId into this place
   EphKey = crypto:strong_rand_bytes(32),
   EphPubKey = libsecp256k1:ec_pubkey_create(EphKey, compressed),
   #{<<"secp256k1">> := PubKey} = EnrKV,
@@ -158,7 +176,7 @@ await_whoareyou(info,
   Msg = #findnode{request_id = RequestId, distances = [0]},
   MaskingIV = discv5_codec:masking_iv(),
   Nonce = discv5_codec:nonce(),
-  StaticHeader = #static_header{version       = <<0, 0, 0, 1>>,
+  StaticHeader = #static_header{version       = 1,
                                 flag          = ?HANDSHAKE_MSG_FLAG,
                                 nonce         = Nonce,
                                 authdata_size = byte_size(Authdata)},
@@ -175,6 +193,10 @@ await_whoareyou(info,
   discv5_udp_listener:send_message(Ip, Port, Packet),
   % TODO send handshake message with signature
   {next_state, session_established, Data#data{nonce = undefined, session_key = InitiatorKey}}.
+
+cooldown_before_retry(enter, OldState, _Data) ->
+  ?LOG_INFO(">>>cooldown_before_retry enter from: ~p", [OldState]),
+  keep_state_and_data;
 
 cooldown_before_retry(state_timeout, cooldown, #data{node_id = NodeId} = Data) ->
   ?LOG_INFO("Retrying handshake with NodeId: 0x~p", [binary:encode_hex(NodeId, lowercase)]),

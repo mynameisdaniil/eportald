@@ -32,7 +32,7 @@
 -type masking_iv() :: 0..?MAX_UNSIGNED_128_BIT.
 
 -type protocol_id()   :: binary().
--type version()       :: binary().
+-type version()       :: pos_integer().
 -type flag()          :: non_neg_integer().
 -type nonce()         :: binary().
 -type authdata_size() :: non_neg_integer().
