@@ -48,7 +48,7 @@ init([]) ->
                   , modules  => [discv5_enr_maintainer]
                    },
                   #{id       => discv5_udp_listener
-                  , start    => {discv5_udp_listener, start_link, [5050, {127, 0, 0, 1}]}
+                  , start    => {discv5_udp_listener, start_link, [5051, {127, 0, 0, 1}]}
                   , restart  => transient
                   , shutdown => ?TIMEOUT
                   , type     => worker

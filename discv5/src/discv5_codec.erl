@@ -273,13 +273,13 @@ encode_packet(#ordinary_message{} = Message) ->
   AuthdataSize = byte_size(EncodedAuthData),
   Nonce = nonce(),
   ProtocolId = <<"discv5">>,
-  Version = <<0, 0, 0, 1>>,
-  StaticHeader = #static_header{
-     protocol_id = ProtocolId,
-     version     = Version,
-     flag        = Flag,
-     nonce       = Nonce
-    },
+  Version = 1,
+  % StaticHeader = #static_header{
+  %    protocol_id = ProtocolId,
+  %    version     = Version,
+  %    flag        = Flag,
+  %    nonce       = Nonce
+  %   },
   <<MaskingIV:16/binary,
     ProtocolId:6/binary,
     Version:2/big-unsigned-integer-unit:8,

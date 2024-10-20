@@ -50,6 +50,7 @@ init({Port, IP}) ->
   {ok, #state{socket = Socket}}.
 
 handle_call({send_message, Ip, Port, Packet}, _From, #state{socket = Socket} = State) ->
+  ?LOG_INFO(">>> sending info to a socket"),
   ok = gen_udp:send(Socket, Ip, Port, Packet),
   {reply, ok, State};
 

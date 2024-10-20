@@ -42,15 +42,14 @@ start_link() ->
 
 -spec init([string()]) -> state().
 init([]) ->
-  ?LOG_INFO("Starting local ENR maintainer"),
+  ?LOG_INFO("Starting session keys maintainer"),
   Table = ets:new(?MODULE, [named_table, public, set]),
   {ok, #state{table = Table}}.
 
 handle_call({get_session_keys_for, NodeId}, _From, #state{table = Table} = State) ->
   case ets:lookup(Table, NodeId) of
     [] ->
-      SessionKey = crypto:strong_rand_bytes(16), % Random key for protocol handshake
-      {reply, {ok, SessionKey}, State};
+      {reply, {error, not_found}, State};
     [{_NodeId, SessionKey}] ->
       {reply, {ok, SessionKey}, State}
   end;

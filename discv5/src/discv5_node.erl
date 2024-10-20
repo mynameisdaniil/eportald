@@ -86,24 +86,30 @@ begin_handshake(enter, OldState, _Data) ->
 begin_handshake(info, do_handshake, #data{node_id = NodeId, enr = #enr_v4{kv = EnrKV}} = Data) ->
   ?LOG_INFO("1. Starting handshake with NodeId: 0x~p", [binary:encode_hex(NodeId, lowercase)]),
   Nonce = discv5_codec:nonce(),
-  {ok, Authdata} = discv5_enr_maintainer:get_node_id(),
+  {ok, SrcId} = discv5_enr_maintainer:get_node_id(),
   StaticHeader = #static_header{version       = 1,
                                 flag          = ?ORDINARY_MSG_FLAG,
                                 nonce         = Nonce,
-                                authdata_size = byte_size(Authdata)},
+                                authdata_size = byte_size(SrcId)},
   MaskingIV = discv5_codec:masking_iv(),
-  MessageAd = discv5_codec:create_message_ad(MaskingIV, StaticHeader, Authdata),
+  MessageAd = discv5_codec:create_message_ad(MaskingIV, StaticHeader, SrcId), % TODO Here we just passing srcid binary as authdata but!
   {ok, RequestId} = discv5_request_id:new_request(self()), % TODO we MUST remove this pid() later after receiving reply to this message or on timeout
   Msg = #findnode{request_id = RequestId, distances = [0]},
-  {ok, SessionKey} = discv5_session_keys:get_session_keys_for(NodeId),
-  ?LOG_INFO(">>> ~p/~p/~p/~p", [SessionKey, Msg, StaticHeader, MessageAd]),
+  SessionKey = case discv5_session_keys:get_session_keys_for(NodeId) of
+                 {error, not_found} -> crypto:strong_rand_bytes(16);
+                 {ok, SK} -> SK
+               end,
   {ok, Encoded} = discv5_codec:encode_protocol_message(SessionKey, Msg, StaticHeader, MessageAd),
   Message = #ordinary_message{data = Encoded,
                               static_header = StaticHeader,
-                              authdata = Authdata,
+                              authdata = #authdata{src_id = SrcId}, % TODO here we are passing a structure
                               message_ad = MessageAd},
   Packet = discv5_codec:encode_packet(Message),
-  #{<<"ip">> := Ip, <<"port">> := Port} = EnrKV,
+  #{<<"ip">> := IpBin, <<"udp">> := UdpBin} = EnrKV,
+  % Port = binary_to_integer(binary:encode_hex(UdpBin), 16),
+  <<Port:16/unsigned-big-integer>> = UdpBin,
+  <<A:8/unsigned-integer, B:8/unsigned-integer, C:8/unsigned-integer, D:8/unsigned-integer>> = IpBin, % TODO maybe move it to ENR?
+  Ip = {A, B, C, D},
   ?LOG_INFO(">>>Port ~p", [Port]),
   discv5_udp_listener:send_message(Ip, Port, Packet),
   gproc:reg({n, l, {nonce, Nonce}}, self()),
@@ -120,7 +126,7 @@ await_whoareyou(state_timeout, initial_state, #data{nonce = Nonce, node_id = Nod
   gproc:unreg({n, l, {nonce, Nonce}}),
   % ok = discv5_request_id:delete_request(RequestId), % TODO Somehow get RequestId into this place
   {next_state, cooldown_before_retry, Data#data{nonce = undefined},
-   [state_timeout, ?COOLDOWN_TIMEOUT, cooldown]};
+   [{state_timeout, ?COOLDOWN_TIMEOUT, cooldown}]};
 
 await_whoareyou(info,
                 #whoareyou_message{} = Msg,
